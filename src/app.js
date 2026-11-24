@@ -77,8 +77,8 @@
       ? `<path d="M45.5 65.5Q50 63 54.5 65.5Q53.5 76 49 84Q48.5 74 45.5 65.5Z" fill="${INK}"/><path d="M47 68Q50 71 53 68" stroke="${BELLY}" stroke-width="1.4" fill="none" stroke-linecap="round"/>`
       : `<path d="M45.5 65.5Q50 63 54.5 65.5Q53.5 76 48.5 85Q48 74 45.5 65.5Z" fill="${INK}"/>`;
     return `<svg class="mascot ${cls}" viewBox="0 0 100 112" role="img" aria-label="${MASCOT}">
-      ${crest}
-      ${wing("l", wr[0])}${wing("r", wr[1])}
+      <g class="m-crest">${crest}</g>
+      <g class="m-wing l">${wing("l", wr[0])}</g><g class="m-wing r">${wing("r", wr[1])}</g>
       <ellipse cx="50" cy="72" rx="27" ry="30" fill="${BODY}"/>
       <path d="M26 78Q28 99 50 102Q72 99 74 78Q70 88 50 90Q30 88 26 78Z" fill="${BODY_D}" opacity=".35"/>
       <ellipse cx="50" cy="83" rx="15.5" ry="15" fill="${BELLY}"/>
@@ -521,6 +521,7 @@
   }
   function leaveLesson() { session = null; if (history.state && history.state.lesson) history.back(); else renderHome(); }
   function renderOnboard(step) {
+    setTimeout(() => { const l = document.getElementById("onb"); if (l && l.classList.contains("intro")) l.addEventListener("pointerdown", () => l.classList.add("skip"), { once: true }); }, 0);
     const sel = S.goal;
     if (step === "dir") {
       $app.innerHTML = `<div class="layer"><div class="center">${mascot("think", "float")}
@@ -531,11 +532,14 @@
         </div></div></div>`;
       return;
     }
-    $app.innerHTML = `<div class="layer"><div class="center">${mascot("happy", "float")}
+    const intro = step === 1;
+    $app.innerHTML = `<div class="layer${intro ? " intro" : ""}" id="onb"><div class="center">${intro
+      ? `<div class="perch"><span class="shadow"></span><div class="flyer">${mascot("happy")}<span class="hi">Salom! 👋</span><i class="spark a">✦</i><i class="spark b">✦</i><i class="spark c">✦</i><i class="spark d">✦</i></div></div>`
+      : mascot("happy", "float")}
       ${step === 2 ? `<h1 class="g">Kunlik maqsad</h1><p>Har kuni qancha o'qiysiz? Keyin Profil bo'limida o'zgartirish mumkin.</p>
         <div class="goals">${[[20, "Yengil", "≈ 10 daqiqa"], [50, "Jiddiy", "≈ 20 daqiqa"], [100, "Kuchli", "≈ 40 daqiqa"]].map(g => `<button class="opt ${sel === g[0] ? "sel" : ""}" data-ogoal="${g[0]}"><span>${g[1]}</span><small>${g[0]} XP · ${g[2]}</small></button>`).join("")}</div>`
-      : `<h1 class="g">Salom! Men ${MASCOT}man.</h1><p>Yetakla'da yangi kasb va ko'nikmalarni o'zbek tilida, o'yin orqali o'rganasiz. Kuniga 5–10 daqiqa yetarli, yo'lni esa men ko'rsatib boraman.</p>`}
-      <div class="foot-center">${step === 2 ? `<button class="btn" data-act="onb-done" ${sel ? "" : "disabled"}>Boshlash</button>` : `<button class="btn" data-act="onb-next">Davom etish</button>${window.DY_CLOUD ? `<button class="btn ghost sm" data-act="cloud-login" style="margin-top:14px;text-transform:none;letter-spacing:0">Hisobim bor — Google bilan kirish</button><small id="cloudst" class="muted" style="display:block;margin-top:6px"></small>` : ""}`}</div>
+      : `<h1 class="g rise d1">Salom! Men ${MASCOT}man.</h1><p class="rise d2">Yetakla'da yangi kasb va ko'nikmalarni o'zbek tilida, o'yin orqali o'rganasiz. Kuniga 5–10 daqiqa yetarli, yo'lni esa men ko'rsatib boraman.</p>`}
+      <div class="foot-center${intro ? " rise d3" : ""}">${step === 2 ? `<button class="btn" data-act="onb-done" ${sel ? "" : "disabled"}>Boshlash</button>` : `<button class="btn" data-act="onb-next">Davom etish</button>${window.DY_CLOUD ? `<button class="btn ghost sm" data-act="cloud-login" style="margin-top:14px;text-transform:none;letter-spacing:0">Hisobim bor — Google bilan kirish</button><small id="cloudst" class="muted" style="display:block;margin-top:6px"></small>` : ""}`}</div>
     </div></div>`;
   }
 

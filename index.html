@@ -425,6 +425,49 @@ i.bar > i { display: block; height: 100%; border-radius: 4px; background: var(--
 .signup .btn { width: 100%; }
 .dirs { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 420px; margin-top: 6px; }
 
+/* ---------- Bilag'on uchib kelib salomlashadi (birinchi sahifa) ---------- */
+.perch { position: relative; width: 150px; height: 165px; }
+.perch .shadow { position: absolute; left: 50%; bottom: -4px; width: 96px; height: 12px; margin-left: -48px; border-radius: 50%; background: rgba(22, 48, 30, .16); animation: shadow 1.5s ease-out both; }
+.flyer { position: relative; width: 150px; height: 165px; }
+.flyer svg.mascot { width: 150px; height: 165px; display: block; }
+.intro .flyer { animation: flyin 1.5s cubic-bezier(.33, .62, .36, 1) both; }
+.intro .flyer svg.mascot { animation: float 3s ease-in-out 2.6s infinite; }
+@keyframes flyin {
+  0% { transform: translate(58vw, -44vh) rotate(20deg) scale(.42); }
+  28% { transform: translate(34vw, -38vh) rotate(-2deg) scale(.56); }
+  55% { transform: translate(-16vw, -28vh) rotate(-16deg) scale(.76); }
+  78% { transform: translate(-5vw, -12px) rotate(7deg) scale(.97); }
+  88% { transform: translate(0, 0) scale(1.1, .86); }
+  95% { transform: translateY(-7px) scale(.97, 1.04); }
+  100% { transform: none; }
+}
+@keyframes shadow { 0%, 40% { opacity: 0; transform: scale(.3); } 88% { opacity: 1; transform: scale(1.15); } 100% { opacity: 1; transform: scale(1); } }
+.m-wing, .m-crest { transform-box: view-box; }
+.m-wing.l { transform-origin: 28px 66px; } .m-wing.r { transform-origin: 72px 66px; }
+.m-crest { transform-origin: 50px 54px; }
+.intro .m-wing.l { animation: flapL .13s ease-in-out 12 alternate; }
+.intro .m-wing.r { animation: flapR .13s ease-in-out 12 alternate, wave .36s ease-in-out 1.75s 4 alternate; }
+.intro .m-crest { animation: crest .55s cubic-bezier(.3, 1.7, .5, 1) 1.4s both; }
+@keyframes flapL { from { transform: rotate(-38deg); } to { transform: rotate(26deg); } }
+@keyframes flapR { from { transform: rotate(38deg); } to { transform: rotate(-26deg); } }
+@keyframes wave { from { transform: rotate(0); } to { transform: rotate(-34deg); } }
+@keyframes crest { from { transform: scale(.5) rotate(0); } 60% { transform: scale(1.12); } to { transform: scale(1); } }
+.flyer .hi { position: absolute; top: 4px; left: calc(100% - 8px); white-space: nowrap; background: var(--surface); border: 2px solid var(--line); border-radius: 14px 14px 14px 4px; padding: 5px 10px; font-weight: 900; font-size: 15px; color: var(--ink); box-shadow: var(--shadow); transform-origin: 0 100%; opacity: 0; }
+.intro .flyer .hi { animation: pop .45s cubic-bezier(.3, 1.6, .5, 1) 1.55s both; }
+@keyframes pop { from { opacity: 0; transform: scale(.2) rotate(-10deg); } to { opacity: 1; transform: none; } }
+.spark { position: absolute; font-style: normal; color: var(--sun); font-size: 18px; opacity: 0; pointer-events: none; }
+.spark.a { left: 2px; top: 52px; --dx: -26px; --dy: -14px; } .spark.b { right: 0; top: 58px; --dx: 26px; --dy: -10px; }
+.spark.c { left: 18px; bottom: 8px; --dx: -22px; --dy: 10px; font-size: 13px; } .spark.d { right: 16px; bottom: 6px; --dx: 22px; --dy: 12px; font-size: 13px; }
+.intro .spark { animation: spark .7s ease-out 1.32s both; }
+@keyframes spark { 0% { opacity: 0; transform: scale(.3); } 35% { opacity: 1; } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(1.1) rotate(40deg); } }
+.intro .rise { animation: rise .55s ease-out both; }
+.intro .d1 { animation-delay: 1.75s; } .intro .d2 { animation-delay: 1.95s; } .intro .d3 { animation-delay: 2.15s; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.intro { overflow: hidden; }
+.intro.skip *, .intro.skip *::before { animation-duration: .01s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; }
+.intro.skip .flyer .hi { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .intro *, .intro *::before { animation: none !important; } .flyer .hi { opacity: 1; } }
+
 </style>
 </head>
 <body>
@@ -2223,8 +2266,8 @@ window.YETAKLA_FIREBASE = {
       ? `<path d="M45.5 65.5Q50 63 54.5 65.5Q53.5 76 49 84Q48.5 74 45.5 65.5Z" fill="${INK}"/><path d="M47 68Q50 71 53 68" stroke="${BELLY}" stroke-width="1.4" fill="none" stroke-linecap="round"/>`
       : `<path d="M45.5 65.5Q50 63 54.5 65.5Q53.5 76 48.5 85Q48 74 45.5 65.5Z" fill="${INK}"/>`;
     return `<svg class="mascot ${cls}" viewBox="0 0 100 112" role="img" aria-label="${MASCOT}">
-      ${crest}
-      ${wing("l", wr[0])}${wing("r", wr[1])}
+      <g class="m-crest">${crest}</g>
+      <g class="m-wing l">${wing("l", wr[0])}</g><g class="m-wing r">${wing("r", wr[1])}</g>
       <ellipse cx="50" cy="72" rx="27" ry="30" fill="${BODY}"/>
       <path d="M26 78Q28 99 50 102Q72 99 74 78Q70 88 50 90Q30 88 26 78Z" fill="${BODY_D}" opacity=".35"/>
       <ellipse cx="50" cy="83" rx="15.5" ry="15" fill="${BELLY}"/>
@@ -2667,6 +2710,7 @@ window.YETAKLA_FIREBASE = {
   }
   function leaveLesson() { session = null; if (history.state && history.state.lesson) history.back(); else renderHome(); }
   function renderOnboard(step) {
+    setTimeout(() => { const l = document.getElementById("onb"); if (l && l.classList.contains("intro")) l.addEventListener("pointerdown", () => l.classList.add("skip"), { once: true }); }, 0);
     const sel = S.goal;
     if (step === "dir") {
       $app.innerHTML = `<div class="layer"><div class="center">${mascot("think", "float")}
@@ -2677,11 +2721,14 @@ window.YETAKLA_FIREBASE = {
         </div></div></div>`;
       return;
     }
-    $app.innerHTML = `<div class="layer"><div class="center">${mascot("happy", "float")}
+    const intro = step === 1;
+    $app.innerHTML = `<div class="layer${intro ? " intro" : ""}" id="onb"><div class="center">${intro
+      ? `<div class="perch"><span class="shadow"></span><div class="flyer">${mascot("happy")}<span class="hi">Salom! 👋</span><i class="spark a">✦</i><i class="spark b">✦</i><i class="spark c">✦</i><i class="spark d">✦</i></div></div>`
+      : mascot("happy", "float")}
       ${step === 2 ? `<h1 class="g">Kunlik maqsad</h1><p>Har kuni qancha o'qiysiz? Keyin Profil bo'limida o'zgartirish mumkin.</p>
         <div class="goals">${[[20, "Yengil", "≈ 10 daqiqa"], [50, "Jiddiy", "≈ 20 daqiqa"], [100, "Kuchli", "≈ 40 daqiqa"]].map(g => `<button class="opt ${sel === g[0] ? "sel" : ""}" data-ogoal="${g[0]}"><span>${g[1]}</span><small>${g[0]} XP · ${g[2]}</small></button>`).join("")}</div>`
-      : `<h1 class="g">Salom! Men ${MASCOT}man.</h1><p>Yetakla'da yangi kasb va ko'nikmalarni o'zbek tilida, o'yin orqali o'rganasiz. Kuniga 5–10 daqiqa yetarli, yo'lni esa men ko'rsatib boraman.</p>`}
-      <div class="foot-center">${step === 2 ? `<button class="btn" data-act="onb-done" ${sel ? "" : "disabled"}>Boshlash</button>` : `<button class="btn" data-act="onb-next">Davom etish</button>${window.DY_CLOUD ? `<button class="btn ghost sm" data-act="cloud-login" style="margin-top:14px;text-transform:none;letter-spacing:0">Hisobim bor — Google bilan kirish</button><small id="cloudst" class="muted" style="display:block;margin-top:6px"></small>` : ""}`}</div>
+      : `<h1 class="g rise d1">Salom! Men ${MASCOT}man.</h1><p class="rise d2">Yetakla'da yangi kasb va ko'nikmalarni o'zbek tilida, o'yin orqali o'rganasiz. Kuniga 5–10 daqiqa yetarli, yo'lni esa men ko'rsatib boraman.</p>`}
+      <div class="foot-center${intro ? " rise d3" : ""}">${step === 2 ? `<button class="btn" data-act="onb-done" ${sel ? "" : "disabled"}>Boshlash</button>` : `<button class="btn" data-act="onb-next">Davom etish</button>${window.DY_CLOUD ? `<button class="btn ghost sm" data-act="cloud-login" style="margin-top:14px;text-transform:none;letter-spacing:0">Hisobim bor — Google bilan kirish</button><small id="cloudst" class="muted" style="display:block;margin-top:6px"></small>` : ""}`}</div>
     </div></div>`;
   }
 
