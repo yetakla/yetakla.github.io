@@ -162,6 +162,8 @@
     return q;
   }
   const isDone = id => !!S.done[id];
+  // Xato savol takrorlashga "vaqti kelgan"mi: yangi xato — darhol, to'g'ri yechilgani — 1 / 3 kundan keyin
+  const dueIds = () => Object.keys(S.pool).filter(k => EX[k] && (!S.pool[k].day || S.pool[k].day <= dayStr()));
   function lessonState(idx) {
     const { l } = LESSONS[idx];
     if (isDone(l.id)) return "done";
@@ -491,9 +493,9 @@
   }
   const OFFS = [0, 52, 84, 52, 0, -52, -84, -52];
   function mapHTML() {
-    const poolN = Object.keys(S.pool).filter(k => EX[k]).length;
+    const poolN = dueIds().length;
     let h = `<div class="map wrap"><div class="maphead"><button class="back" data-tab="home" aria-label="Asosiyga qaytish">${I.back}<span>Asosiy</span></button><b>Data analitika</b></div>`;
-    h += `<div class="practice-cta">${I.repeat.replace("<svg", '<svg style="width:30px;height:30px;color:var(--sky);flex:none"')}<p><b>Takrorlash mashqi</b>${poolN ? `${poolN} ta xato savol sizni kutyapti. Har to'g'ri javob +1 ❤️` : "Har to'g'ri javob +1 ❤️ qaytaradi"}</p><button class="btn sky sm" data-act="practice">Boshlash</button></div>`;
+    h += `<div class="practice-cta">${I.repeat.replace("<svg", '<svg style="width:30px;height:30px;color:var(--sky);flex:none"')}<p><b>Takrorlash mashqi</b>${poolN ? `${poolN} ta xato savol sizni kutyapti. Har to'g'ri javob +1 ❤️` : "O'tilgan darslardan savollar. Har to'g'ri javob +1 ❤️"}</p><button class="btn sky sm" data-act="practice">Boshlash</button></div>`;
     COURSE.forEach((sec, si) => {
       const locked = sec.soon; const nDone = sec.lessons.filter(l => isDone(l.id)).length;
       h += `<section><div class="banner ${locked ? "locked" : ""}" style="background:${sec.color}"><div class="t"><div class="eyebrow">${si}-bo'lim</div><h2>${esc(sec.title)}</h2><p>${esc(sec.desc)}</p></div>${!locked && si > 0 && sec.lessons.length && lessonState(LESSONS.findIndex(x => x.l.id === sec.lessons[0].id)) === "locked" ? `<button class="pill jump" data-skip="${sec.id}" aria-label="Sinov bilan ${si}-bo'limga sakrash">⏩ Sakrash</button>` : `<span class="pill">${locked ? "🔒 Tez kunda" : `${nDone}/${sec.lessons.length}`}</span>`}</div><div class="path">`;
@@ -551,7 +553,7 @@
     const g = S.goal || 20, met = S.todayXp >= g, hr = new Date().getHours(), pct = total ? Math.round(100 * done / total) : 0;
     const hello = (hr < 5 ? "Xayrli tun" : hr < 11 ? "Xayrli tong" : hr < 18 ? "Xayrli kun" : "Xayrli kech") + (first ? ", " + first : "") + "!";
     const froze = S.frozeNote; if (froze) { S.frozeNote = 0; save(); }
-    const poolN = Object.keys(S.pool).filter(k => EX[k]).length;
+    const poolN = dueIds().length;
     const say = froze ? `❄️ Olov himoyasi ${S.streak} kunlik olovingizni saqlab qoldi!` : met ? "Bugungi maqsad bajarildi. Barakalla!" : S.todayXp ? `Maqsadga ${g - S.todayXp} XP qoldi.` : S.streak ? "Olovni o'chirmang: bugun bitta dars yetarli." : "Bugun bitta dars bilan boshlaymiz.";
     return `<div class="page wrap home">
       <div class="hello">${mascot(met ? "happy" : "ok")}<div class="say"><b>${esc(hello)}</b><span>${say}</span></div></div>
@@ -665,13 +667,13 @@
   }
   function startPractice(mode) {
     if (mode === "mistakes") {
-      const ids = Object.keys(S.pool).filter(k => EX[k]).sort((a, b) => (S.pool[a].day || "").localeCompare(S.pool[b].day || "") || S.pool[a].box - S.pool[b].box).slice(0, 8);
+      const ids = dueIds().sort((a, b) => (S.pool[a].day || "").localeCompare(S.pool[b].day || "") || S.pool[a].box - S.pool[b].box).slice(0, 8);
       if (ids.length) {
         session = { kind: "practice", l: { id: "practice", title: "Xatolar ustida ishlash", simple: "Bu yerda siz xato qilgan savollar qaytadan chiqadi. Har bir savol 3 marta to'g'ri yechilgach, ro'yxatdan chiqadi." }, sec: { color: "#2f6fdb" }, q: ids.map(k => Object.assign({ id: k, review: true }, EX[k].st, { _order: null, _draft: undefined })), i: 0, total: ids.length, firstOk: 0, wrongIds: new Set(), seen: new Set(), t0: Date.now(), xp: 0 };
         return renderStep();
       }
     }
-    let ids = Object.keys(S.pool).filter(k => EX[k]);
+    let ids = dueIds();
     const doneLessons = LESSONS.filter(x => isDone(x.l.id)).map(x => x.l.id);
     const extra = Object.keys(EX).filter(k => doneLessons.includes(EX[k].l.id) && !ids.includes(k));
     ids = shuffle(ids).slice(0, 6).concat(shuffle(extra)).slice(0, 6);
@@ -879,11 +881,12 @@
     }
     phase = "result";
     const first = !session.seen.has(st.id); session.seen.add(st.id);
+    const wasMistake = !!S.pool[st.id]; // takrorlashda XP faqat haqiqiy xato savol uchun
     if (r.ok) {
       session.combo = (session.combo || 0) + 1; sfx("ok", session.combo - 1);
-      if (first) { session.firstOk++; const gain = session.kind === "test" ? 0 : session.kind === "practice" ? 5 : session.retry ? 0 : 10; session.xp += gain; }
+      if (first) { session.firstOk++; const gain = session.kind === "test" ? 0 : session.kind === "practice" ? (wasMistake ? 5 : 0) : session.retry ? 0 : 10; session.xp += gain; }
       if (session.kind === "practice" && S.hearts < 5) S.hearts++;
-      if (st.review) { const p = S.pool[st.id]; if (p) { p.box++; if (p.box >= 3) delete S.pool[st.id]; else { p.due = S.lessonsDone + 2; const d = new Date(); d.setDate(d.getDate() + (p.box === 1 ? 1 : 3)); p.day = dayStr(d); } } S.reviewsOk++; questEv("review"); }
+      if (st.review) { const p = S.pool[st.id]; if (p && first) { p.box++; if (p.box >= 3) delete S.pool[st.id]; else { p.due = S.lessonsDone + 2; const d = new Date(); d.setDate(d.getDate() + (p.box === 1 ? 1 : 3)); p.day = dayStr(d); } } if (wasMistake && first) { S.reviewsOk++; questEv("review"); } }
       questEv("combo", session.combo);
       if (st.t === "sql" || st.t === "formula") questEv("live");
       if (st.t === "sql" && session.kind === "lesson" && session.l.id === FINAL) { const ed = document.getElementById("sqled"); if (ed) S.port[st.id] = ed.value.slice(0, 4000); }
@@ -945,7 +948,7 @@
     lastWin = session.kind === "test" ? `Sinov bilan ${COURSE.findIndex(s => s.id === session.sid)}-bo'limga sakradim!` : secWas && secNo >= 0 ? `${secNo}-bo'lim: “${session.sec.title}” tugatildi!` : session.kind === "lesson" ? `“${session.l.title}” darsini tugatdim!` : null;
     $app.innerHTML = `<div class="layer"><div class="center">${mascot("happy", "float")}
       <h1>${session.kind === "test" ? "Sinovdan o'tdingiz! 🚀" : session.kind === "practice" ? "Takrorlash tugadi!" : boss ? "Boss yengildi! 👑" : "Dars tugadi!"}</h1>
-      <p>${session.kind === "test" ? `${opened} ta dars ochildi. +30 XP bonus.` : (perfect ? "Birorta ham xato yo'q — ajoyib natija!" : session.kind === "practice" ? `Jonlar: ❤️ ${S.hearts}. Endi yangi darsga tayyorsiz.` : "Xato qilingan savollar keyingi darslarda qayta chiqadi.") + (bonus ? " Xatosiz dars uchun +20 bonus XP." : "")}</p>
+      <p>${session.kind === "test" ? `${opened} ta dars ochildi. +30 XP bonus.` : (perfect ? "Birorta ham xato yo'q — ajoyib natija!" : session.kind === "practice" ? `Jonlar: ❤️ ${S.hearts}. Endi yangi darsga tayyorsiz.` : "Xato qilingan savollar keyingi darslarda qayta chiqadi.") + (bonus ? " Xatosiz dars uchun +20 bonus XP." : "") + (session.kind === "practice" && !total ? " Takrorlashda XP faqat ilgari xato qilingan savollar uchun beriladi." : "")}</p>
       <div class="endstats"><div class="es" style="--c:var(--sun)"><span>Jami XP</span><b>⚡ ${total}</b></div><div class="es" style="--c:var(--green)"><span>Aniqlik</span><b>${acc}%</b></div><div class="es" style="--c:var(--sky)"><span>Vaqt</span><b>${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}</b></div></div>
       <div class="foot-center"><button class="btn" data-act="home">Davom etish</button>${lastWin ? `<button class="btn ghost" data-act="share-win">Natijani ulashish</button>` : ""}</div></div></div>`;
     confetti();
