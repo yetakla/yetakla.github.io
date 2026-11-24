@@ -456,3 +456,9 @@ i.bar > i { display: block; height: 100%; border-radius: 4px; background: var(--
 .intro.skip *, .intro.skip *::before { animation-duration: .01s !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; }
 .intro.skip .flyer .hi { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .intro *, .intro *::before { animation: none !important; } .flyer .hi { opacity: 1; } }
+/* fon musiqasi tugmasi (tepada) */
+.mus { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border-radius: 10px; color: var(--muted); }
+.mus svg { width: 21px; height: 21px; }
+.mus.on { color: var(--green); }
+.mus.on svg .x { display: none; }
+.mus svg .x { stroke: var(--heart); }
