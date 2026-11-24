@@ -579,6 +579,13 @@ i.bar > i { display: block; height: 100%; border-radius: 4px; background: var(--
 .nm-err:empty { display: none; }
 .rank .av { overflow: hidden; }
 .rank .av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pav .emo { width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; font-size: 54px; line-height: 1; }
+.emo-head { text-align: center; font-size: 13px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.emo-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.emo-grid button { aspect-ratio: 1; border-radius: 14px; font-size: 26px; line-height: 1; display: grid; place-items: center; border: 3px solid transparent; transition: transform .08s; }
+.emo-grid button:active { transform: scale(.92); }
+.emo-grid button.on { border-color: var(--sky); }
+.btn.ghost.danger { color: var(--heart); border-color: color-mix(in srgb, var(--heart) 45%, var(--line)); --bd: color-mix(in srgb, var(--heart) 35%, var(--line)); }
 
 </style>
 <link rel="manifest" href="manifest.webmanifest">
@@ -2318,7 +2325,7 @@ window.YETAKLA_FIREBASE = {
     },
     card() {
       if (user) {
-        return `<div class="card cloud acct"><div class="cl-row"><span class="g-ic"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9c-.3 1.4-1 2.5-2.2 3.3v2.7h3.6c2-1.9 3.2-4.7 3.2-8z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.7c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.6H2.1v2.8C3.9 20.6 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.8 14.1c-.2-.7-.4-1.4-.4-2.1s.1-1.4.4-2.1V7.1H2.1C1.4 8.6 1 10.2 1 12s.4 3.4 1.1 4.9l3.7-2.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2C17.5 2.1 15 1 12 1 7.7 1 3.9 3.4 2.1 7.1l3.7 2.8c.9-2.6 3.3-4.5 6.2-4.5z"/></svg></span><div class="cl-info"><b>Google hisobi</b><small id="cloudst">${label() || "Progress saqlanmoqda"}</small></div><button class="btn ghost sm" data-act="cloud-logout">Chiqish</button></div></div>`;
+        return `<div class="card cloud acct"><div class="cl-row"><span class="g-ic"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9c-.3 1.4-1 2.5-2.2 3.3v2.7h3.6c2-1.9 3.2-4.7 3.2-8z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.7c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.6H2.1v2.8C3.9 20.6 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.8 14.1c-.2-.7-.4-1.4-.4-2.1s.1-1.4.4-2.1V7.1H2.1C1.4 8.6 1 10.2 1 12s.4 3.4 1.1 4.9l3.7-2.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2C17.5 2.1 15 1 12 1 7.7 1 3.9 3.4 2.1 7.1l3.7 2.8c.9-2.6 3.3-4.5 6.2-4.5z"/></svg></span><div class="cl-info"><b>Google hisobi</b><small id="cloudst">${label() || "Progress saqlanmoqda"}</small></div><button class="btn ghost sm danger" data-act="cloud-logout">Chiqish</button></div></div>`;
       }
       return `<div class="card cloud"><h3>Progressni saqlang</h3><p class="muted" style="margin:6px 0 12px">Hisobga kirsangiz, progressingiz telefon va kompyuterda bir xil bo'ladi va hech qachon yo'qolmaydi.</p><button class="btn gbtn" data-act="cloud-login"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9c-.3 1.4-1 2.5-2.2 3.3v2.7h3.6c2-1.9 3.2-4.7 3.2-8z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.7c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.6H2.1v2.8C3.9 20.6 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.8 14.1c-.2-.7-.4-1.4-.4-2.1s.1-1.4.4-2.1V7.1H2.1C1.4 8.6 1 10.2 1 12s.4 3.4 1.1 4.9l3.7-2.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2C17.5 2.1 15 1 12 1 7.7 1 3.9 3.4 2.1 7.1l3.7 2.8c.9-2.6 3.3-4.5 6.2-4.5z"/></svg><span>Google bilan kirish</span></button><small id="cloudst" class="muted" style="display:block;margin-top:8px">${label()}</small></div>`;
     },
@@ -2891,13 +2898,18 @@ window.YETAKLA_FIREBASE = {
   // Profil rasmi: qurilmada kichraytirilgan JPEG (data:) yoki Google rasmi (https)
   const okPhoto = p => { p = String(p || ""); return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p) || /^https:\/\/lh\d\.googleusercontent\.com\/[^"'<>\s]*$/.test(p) ? p : ""; };
   const photoSrc = () => okPhoto(S.photo);
+  // Rasm o'rniga hayvon emojisi: profilda katta emoji, reyting uchun 64px rasmga chiziladi
+  const ANIMALS = [["🦊", "#ffd8b8"], ["🐼", "#e3e8ec"], ["🐨", "#dfe3f0"], ["🦁", "#ffe6a8"], ["🐯", "#ffdcb0"], ["🐸", "#d3f2cf"], ["🐵", "#f1dcc8"], ["🦉", "#e8dccd"], ["🐧", "#d6e6f7"], ["🐰", "#fbe0ea"], ["🐻", "#ead7c5"], ["🐱", "#fdebc8"], ["🐶", "#f4e1cf"], ["🦄", "#efdcf7"], ["🐢", "#d7efd9"], ["🐬", "#d2ecf7"], ["🐝", "#fff0b3"], ["🐙", "#fbd9de"]];
+  const emoOf = v => { const m = /^emo:(.+)$/.exec(String(v || "")); return m && ANIMALS.find(a => a[0] === m[1]) || null; };
   function editPhoto() {
     const C = window.DY_CLOUD, u = C && C.user(), g = u && u.photoURL && /^https:\/\/lh\d\.googleusercontent\.com\//.test(u.photoURL) ? u.photoURL : "";
     const m = document.createElement("div"); m.className = "sheet-modal";
-    m.innerHTML = `<div class="card" role="dialog" aria-label="Profil rasmi"><h3>Profil rasmi</h3><p class="muted" style="font-size:15px">Rasm faqat sizning profilingizda ko'rinadi. Kvadrat shaklda kesib, kichraytirib saqlanadi.</p>
+    m.innerHTML = `<div class="card" role="dialog" aria-label="Profil rasmi"><h3>Profil rasmi</h3><p class="muted" style="font-size:15px">Profilingizda va reytingda ko'rinadi. Rasm kvadrat shaklda kesib, kichraytirib saqlanadi.</p>
       <label class="btn"><input type="file" id="phin" accept="image/*" hidden>Rasm tanlash</label>
+      <div class="emo-head">yoki hayvon tanlang</div>
+      <div class="emo-grid">${ANIMALS.map(a => `<button data-emo="${a[0]}" class="${S.photo === "emo:" + a[0] ? "on" : ""}" style="background:${a[1]}" aria-label="Hayvon belgisi">${a[0]}</button>`).join("")}</div>
       ${g ? `<button class="btn ghost" data-act="photo-google">Google rasmini qo'yish</button>` : ""}
-      ${photoSrc() ? `<button class="btn ghost red-t" data-act="photo-del">Rasmni olib tashlash</button>` : ""}
+      ${photoSrc() || emoOf(S.photo) ? `<button class="btn ghost red-t" data-act="photo-del">Rasmni olib tashlash</button>` : ""}
       <small id="pherr" class="nm-err"></small>
       <button class="btn ghost" data-act="close-simple">Bekor qilish</button></div>`;
     m.addEventListener("click", e => { if (e.target === m || e.target.closest('[data-act="close-simple"]')) m.remove(); });
@@ -2925,11 +2937,13 @@ window.YETAKLA_FIREBASE = {
   function thumbOf(v) {
     return new Promise(res => {
       if (!v) return res("");
+      const em = emoOf(v);
+      if (em) { const cv = document.createElement("canvas"); cv.width = cv.height = 64; const x = cv.getContext("2d"); x.fillStyle = em[1]; x.fillRect(0, 0, 64, 64); x.font = '40px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(em[0], 32, 35); return res(cv.toDataURL("image/jpeg", 0.8)); }
       if (/^https:/.test(v)) return res(v.replace(/=s\d+(-c)?$/, "") + "=s96-c");
       const im = new Image(); im.onload = () => { const cv = document.createElement("canvas"); cv.width = cv.height = 64; cv.getContext("2d").drawImage(im, 0, 0, 64, 64); res(cv.toDataURL("image/jpeg", 0.72)); }; im.onerror = () => res(""); im.src = v;
     });
   }
-  async function setPhoto(v) { S.photo = v; S.photoSm = await thumbOf(v); S.photoAt = Date.now(); save(); if (window.DY_CLOUD && window.DY_CLOUD.nameChanged) window.DY_CLOUD.nameChanged(); document.querySelectorAll(".sheet-modal").forEach(x => x.remove()); renderHome(); toastNow(v ? "Rasm saqlandi" : "Rasm olib tashlandi", "📷"); }
+  async function setPhoto(v) { S.photo = v; S.photoSm = await thumbOf(v); S.photoAt = Date.now(); save(); if (window.DY_CLOUD && window.DY_CLOUD.nameChanged) window.DY_CLOUD.nameChanged(); document.querySelectorAll(".sheet-modal").forEach(x => x.remove()); renderHome(); toastNow(v ? (emoOf(v) ? "Belgi saqlandi" : "Rasm saqlandi") : "Rasm olib tashlandi", emoOf(v) ? emoOf(v)[0] : "📷"); }
   function profileHTML() {
     const C = window.DY_CLOUD, u = C && C.user(), nm = myName();
     const ti = TIERS.reduce((a, t, i) => S.xp >= t[1] ? i : a, 0), cur = TIERS[ti];
@@ -2938,7 +2952,7 @@ window.YETAKLA_FIREBASE = {
     const tile = (ic, v, l) => `<div class="pst"><span class="pi">${ic}</span><b>${v}</b><small>${l}</small></div>`;
     return `<div class="page wrap prof">
       <div class="phero">
-        <button class="pav" data-act="photo-edit" style="--t:${cur[2]}" aria-label="Profil rasmini o'zgartirish">${photoSrc() ? `<img src="${esc(photoSrc())}" alt="" referrerpolicy="no-referrer">` : nm ? esc(nm[0].toUpperCase()) : mascot("happy")}<span class="cam">📷</span></button>
+        <button class="pav" data-act="photo-edit" style="--t:${cur[2]}" aria-label="Profil rasmini o'zgartirish">${photoSrc() ? `<img src="${esc(photoSrc())}" alt="" referrerpolicy="no-referrer">` : emoOf(S.photo) ? `<span class="emo" style="background:${emoOf(S.photo)[1]}">${emoOf(S.photo)[0]}</span>` : nm ? esc(nm[0].toUpperCase()) : mascot("happy")}<span class="cam">📷</span></button>
         <button class="pname" data-act="name-edit"><span class="nm ${nm ? "" : "empty"}">${nm ? esc(nm) : "Ismingizni kiriting"}</span><span class="pen">${I.pen}</span></button>
         <div class="pmeta"><span class="tier" style="--t:${cur[2]}">${cur[0]} liga</span><span class="acct ${u ? "on" : ""}">${u ? "Hisob ulangan ✓" : "Mehmon rejimi"}</span></div>
       </div>
@@ -3615,8 +3629,9 @@ ${P.out.map((o, i) => `<h2>${i + 1}. ${esc(o.task)}</h2><pre>${esc(o.sql)}</pre>
 
   /* ---------- events ---------- */
   document.addEventListener("click", e => {
-    const t = e.target.closest("[data-act],[data-tab],[data-lesson],[data-start],[data-goal],[data-ogoal],[data-skip]");
+    const t = e.target.closest("[data-act],[data-tab],[data-lesson],[data-start],[data-goal],[data-ogoal],[data-skip],[data-emo]");
     if (!t) return;
+    if (t.dataset.emo) { if (emoOf("emo:" + t.dataset.emo)) setPhoto("emo:" + t.dataset.emo); return; }
     if (t.dataset.skip) return askTest(t.dataset.skip);
     if (t.dataset.tab) { if (tab !== t.dataset.tab) hpush({ tab: t.dataset.tab }); tab = t.dataset.tab; openLesson = null; modal = null; renderHome(); window.scrollTo(0, 0); return; }
     if (t.dataset.lesson) { openLesson = openLesson === t.dataset.lesson ? null : t.dataset.lesson; renderHome(); return; }
