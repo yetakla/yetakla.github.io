@@ -533,7 +533,8 @@
   const myName = () => { const C = window.DY_CLOUD, u = C && C.user(); return String(S.name || (u && u.displayName) || "").trim(); };
   let allBadges = false;
   // Profil rasmi: qurilmada kichraytirilgan JPEG (data:) yoki Google rasmi (https)
-  const photoSrc = () => { const p = String(S.photo || ""); return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p) || /^https:\/\/lh\d\.googleusercontent\.com\//.test(p) ? p : ""; };
+  const okPhoto = p => { p = String(p || ""); return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p) || /^https:\/\/lh\d\.googleusercontent\.com\/[^"'<>\s]*$/.test(p) ? p : ""; };
+  const photoSrc = () => okPhoto(S.photo);
   function editPhoto() {
     const C = window.DY_CLOUD, u = C && C.user(), g = u && u.photoURL && /^https:\/\/lh\d\.googleusercontent\.com\//.test(u.photoURL) ? u.photoURL : "";
     const m = document.createElement("div"); m.className = "sheet-modal";
@@ -564,7 +565,15 @@
     im.onerror = () => { URL.revokeObjectURL(url); if (err) { err.style.color = ""; err.textContent = "Rasmni ochib bo'lmadi. Boshqa rasm tanlang (JPG yoki PNG)."; } };
     im.src = url;
   }
-  function setPhoto(v) { S.photo = v; S.photoAt = Date.now(); save(); document.querySelectorAll(".sheet-modal").forEach(x => x.remove()); renderHome(); toastNow(v ? "Rasm saqlandi" : "Rasm olib tashlandi", "📷"); }
+  // Reyting uchun kichik nusxa (64px), Google rasmi uchun kichik o'lcham havolasi
+  function thumbOf(v) {
+    return new Promise(res => {
+      if (!v) return res("");
+      if (/^https:/.test(v)) return res(v.replace(/=s\d+(-c)?$/, "") + "=s96-c");
+      const im = new Image(); im.onload = () => { const cv = document.createElement("canvas"); cv.width = cv.height = 64; cv.getContext("2d").drawImage(im, 0, 0, 64, 64); res(cv.toDataURL("image/jpeg", 0.72)); }; im.onerror = () => res(""); im.src = v;
+    });
+  }
+  async function setPhoto(v) { S.photo = v; S.photoSm = await thumbOf(v); S.photoAt = Date.now(); save(); if (window.DY_CLOUD && window.DY_CLOUD.nameChanged) window.DY_CLOUD.nameChanged(); document.querySelectorAll(".sheet-modal").forEach(x => x.remove()); renderHome(); toastNow(v ? "Rasm saqlandi" : "Rasm olib tashlandi", "📷"); }
   function profileHTML() {
     const C = window.DY_CLOUD, u = C && C.user(), nm = myName();
     const ti = TIERS.reduce((a, t, i) => S.xp >= t[1] ? i : a, 0), cur = TIERS[ti];
@@ -640,11 +649,12 @@
       <div class="card course soon"><span class="ic">${I.lock}</span><span class="txt"><b>Yangi yo'nalishlar</b><small>Tez kunda</small></span></div>
     </div>`;
   }
+  const avHTML = r => { const ph = okPhoto(r.ph); return `<span class="av">${ph ? `<img src="${esc(ph)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : esc((r.name || "?").trim()[0] || "?").toUpperCase()}</span>`; };
   function rankRows(d) {
     if (!d) return `<div class="card muted">Yuklanmoqda…</div>`;
     if (d.error) return `<div class="card muted">Reytingni yuklab bo'lmadi. Internetni tekshirib, qayta oching.</div>`;
     if (!d.rows.length) return `<div class="card muted">Bu hafta hali hech kim XP yig'magan. Birinchi bo'ling!</div>`;
-    let h = `<ol class="rank">${d.rows.map((r, i) => `<li class="${r.id === d.uid ? "me" : ""}"><span class="pos p${i + 1}">${i + 1}</span><span class="av">${esc((r.name || "?").trim()[0] || "?").toUpperCase()}</span><b>${esc(r.name || "Nomsiz")}</b><span class="x">${r.wxp} XP</span></li>`).join("")}</ol>`;
+    let h = `<ol class="rank">${d.rows.map((r, i) => `<li class="${r.id === d.uid ? "me" : ""}"><span class="pos p${i + 1}">${i + 1}</span>${avHTML(r)}<b>${esc(r.name || "Nomsiz")}</b><span class="x">${r.wxp} XP</span></li>`).join("")}</ol>`;
     if (!d.rows.some(r => r.id === d.uid)) h += `<div class="card me-row">${d.me ? `Sizning o'rningiz: <b>${d.me.rank}</b> · ${d.me.wxp} XP` : "Bu hafta dars o'tib, reytingga kiring."}</div>`;
     return h;
   }
@@ -663,7 +673,7 @@
     if (d.error) return `<div class="card muted">Do'stlar ro'yxatini yuklab bo'lmadi. Internetni tekshirib, qayta oching.</div>`;
     if (!d.count) return inv;
     const rows = d.rows.slice().sort((a, b) => b.wxp - a.wxp);
-    return `<ol class="rank">${rows.map((r, i) => `<li class="${r.id === d.uid ? "me" : ""}"><span class="pos p${i + 1}">${i + 1}</span><span class="av">${esc((r.name || "?").trim()[0] || "?").toUpperCase()}</span><b>${esc(r.name || "Nomsiz")}</b><span class="x">${r.wxp} XP</span></li>`).join("")}</ol>${d.idle ? `<p class="muted" style="text-align:center">Yana ${d.idle} ta do'stingiz bu hafta hali o'qimagan.</p>` : ""}${inv}`;
+    return `<ol class="rank">${rows.map((r, i) => `<li class="${r.id === d.uid ? "me" : ""}"><span class="pos p${i + 1}">${i + 1}</span>${avHTML(r)}<b>${esc(r.name || "Nomsiz")}</b><span class="x">${r.wxp} XP</span></li>`).join("")}</ol>${d.idle ? `<p class="muted" style="text-align:center">Yana ${d.idle} ta do'stingiz bu hafta hali o'qimagan.</p>` : ""}${inv}`;
   }
   function renderHome() {
     document.body.classList.remove("in-lesson");
@@ -1312,6 +1322,7 @@ ${P.out.map((o, i) => `<h2>${i + 1}. ${esc(o.task)}</h2><pre>${esc(o.sql)}</pre>
     session = null; tab = st.tab || "home"; openLesson = null; modal = null; renderHome(); window.scrollTo(0, 0);
   });
   load();
+  if (S.photo && !S.photoSm) thumbOf(S.photo).then(t => { S.photoSm = t; save(); });
   try { history.replaceState({ tab: "home" }, ""); } catch (e) { /* iframe */ }
   if (!S.onboarded) renderOnboard(1); else renderHome();
   window.DY_APP = { state: () => S, startLesson, cur: () => session && session.q[session.i], version: "1.3", musicOn: () => !!mTimer && !mOff,

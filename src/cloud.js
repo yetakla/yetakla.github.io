@@ -32,7 +32,7 @@
     else if (qa && qb && qa.day === qb.day) { r.quests = Object.assign({}, qa, { p: Object.assign({}, qb.p, qa.p), got: Object.assign({}, qb.got, qa.got) }); for (const k in qb.p || {}) r.quests.p[k] = Math.max(qa.p[k] || 0, qb.p[k]); }
     r.port = Object.assign({}, b.port || {}, a.port || {});
     r.name = a.name || b.name || "";
-    if ((b.photoAt || 0) > (a.photoAt || 0)) { r.photo = b.photo || ""; r.photoAt = b.photoAt; }
+    if ((b.photoAt || 0) > (a.photoAt || 0)) { r.photo = b.photo || ""; r.photoSm = b.photoSm || ""; r.photoAt = b.photoAt; }
     r.refBy = a.refBy || b.refBy || ""; r.refFrom = a.refFrom || b.refFrom || "";
     r.refClaimed = Array.from(new Set([].concat(a.refClaimed || [], b.refClaimed || [])));
     return r;
@@ -48,18 +48,19 @@
   }
 
   const nameOf = () => { const st = g.DY_APP && g.DY_APP.state(); return String((st && st.name) || (user && user.displayName) || "").trim(); };
+  const phOf = st => { const p = String((st && st.photoSm) || ""); return p.length <= 8000 && (/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(p) || /^https:\/\/lh\d\.googleusercontent\.com\/[^"'<>\s]*$/.test(p)) ? p : ""; };
   // Reyting uchun qisqa ism: "Doniyorjon Kuchkarov" -> "Doniyorjon K."
   const shortName = n => { const p = String(n || "").trim().split(/\s+/).filter(Boolean); return !p.length ? "Nomsiz" : (p[0].slice(0, 24) + (p[1] ? " " + p[1][0].toUpperCase() + "." : "")); };
   // Haftalik reyting yozuvi: XP o'zgarganda, ko'pi bilan daqiqada bir marta
   async function pushBoard(force) {
     clearTimeout(bTimer); bTimer = null;
     const st = g.DY_APP && g.DY_APP.state(); if (!user || !fb || !st || !st.week || !(st.weekXp > 0)) return;
-    const key = st.week + ":" + st.weekXp + ":" + nameOf(); if (key === bSent) return;
+    const ph = phOf(st), key = st.week + ":" + st.weekXp + ":" + nameOf() + ":" + ph.length; if (key === bSent) return;
     const wait = 60000 - (Date.now() - bLast);
     if (!force && wait > 0) { bTimer = setTimeout(() => pushBoard(true), wait); return; }
     bLast = Date.now();
     try {
-      await fb.fs.setDoc(fb.fs.doc(db, "boards", st.week, "users", user.uid), { name: shortName(nameOf()), wxp: Math.round(st.weekXp), at: fb.fs.serverTimestamp() });
+      await fb.fs.setDoc(fb.fs.doc(db, "boards", st.week, "users", user.uid), Object.assign({ name: shortName(nameOf()), wxp: Math.round(st.weekXp), at: fb.fs.serverTimestamp() }, ph ? { ph } : {}));
       bSent = key; bcache = null;
     } catch (e) { bTimer = setTimeout(() => pushBoard(true), 30000); }
   }
@@ -117,7 +118,7 @@
       const st = g.DY_APP.state(), wk = st.week;
       const c = this.boardCache(); if (c && c.week === wk) return c;
       try {
-        if (bTimer || (st.weekXp > 0 && bSent !== wk + ":" + st.weekXp + ":" + nameOf())) await pushBoard(true);
+        if (bTimer || (st.weekXp > 0 && bSent !== wk + ":" + st.weekXp + ":" + nameOf() + ":" + phOf(st).length)) await pushBoard(true);
         const col = fb.fs.collection(db, "boards", wk, "users");
         const snap = await fb.fs.getDocs(fb.fs.query(col, fb.fs.orderBy("wxp", "desc"), fb.fs.limit(50)));
         const rows = []; snap.forEach(d => rows.push(Object.assign({ id: d.id }, d.data())));
@@ -138,12 +139,12 @@
       const c = this.friendsCache(); if (c) return c;
       try {
         const st = g.DY_APP.state(), wk = st.week;
-        if (bTimer || (st.weekXp > 0 && bSent !== wk + ":" + st.weekXp + ":" + nameOf())) await pushBoard(true);
+        if (bTimer || (st.weekXp > 0 && bSent !== wk + ":" + st.weekXp + ":" + nameOf() + ":" + phOf(st).length)) await pushBoard(true);
         if (!refIds.length) await refs();
         const ids = Array.from(new Set([].concat(refIds, st.refBy ? [st.refBy] : []))).filter(x => x !== user.uid).slice(0, 40);
         const docs = await Promise.all([user.uid].concat(ids).map(id => fb.fs.getDoc(fb.fs.doc(db, "boards", wk, "users", id)).then(d => d.exists() ? Object.assign({ id }, d.data()) : null).catch(() => null)));
         const rows = docs.filter(Boolean);
-        if (!rows.some(r => r.id === user.uid)) rows.push({ id: user.uid, name: shortName(nameOf()), wxp: Math.round(st.weekXp || 0) });
+        if (!rows.some(r => r.id === user.uid)) rows.push({ id: user.uid, name: shortName(nameOf()), wxp: Math.round(st.weekXp || 0), ph: phOf(st) });
         fcache = { t: Date.now(), uid: user.uid, rows, count: ids.length, idle: ids.length - rows.filter(r => r.id !== user.uid).length };
         return fcache;
       } catch (e) { return { error: true }; }

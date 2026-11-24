@@ -577,6 +577,8 @@ i.bar > i { display: block; height: 100%; border-radius: 4px; background: var(--
 .sheet-modal label.btn { cursor: pointer; }
 .btn.ghost.red-t { color: var(--heart); }
 .nm-err:empty { display: none; }
+.rank .av { overflow: hidden; }
+.rank .av img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 </style>
 <link rel="manifest" href="manifest.webmanifest">
@@ -2193,7 +2195,7 @@ window.YETAKLA_FIREBASE = {
     else if (qa && qb && qa.day === qb.day) { r.quests = Object.assign({}, qa, { p: Object.assign({}, qb.p, qa.p), got: Object.assign({}, qb.got, qa.got) }); for (const k in qb.p || {}) r.quests.p[k] = Math.max(qa.p[k] || 0, qb.p[k]); }
     r.port = Object.assign({}, b.port || {}, a.port || {});
     r.name = a.name || b.name || "";
-    if ((b.photoAt || 0) > (a.photoAt || 0)) { r.photo = b.photo || ""; r.photoAt = b.photoAt; }
+    if ((b.photoAt || 0) > (a.photoAt || 0)) { r.photo = b.photo || ""; r.photoSm = b.photoSm || ""; r.photoAt = b.photoAt; }
     r.refBy = a.refBy || b.refBy || ""; r.refFrom = a.refFrom || b.refFrom || "";
     r.refClaimed = Array.from(new Set([].concat(a.refClaimed || [], b.refClaimed || [])));
     return r;
@@ -2209,18 +2211,19 @@ window.YETAKLA_FIREBASE = {
   }
 
   const nameOf = () => { const st = g.DY_APP && g.DY_APP.state(); return String((st && st.name) || (user && user.displayName) || "").trim(); };
+  const phOf = st => { const p = String((st && st.photoSm) || ""); return p.length <= 8000 && (/^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(p) || /^https:\/\/lh\d\.googleusercontent\.com\/[^"'<>\s]*$/.test(p)) ? p : ""; };
   // Reyting uchun qisqa ism: "Doniyorjon Kuchkarov" -> "Doniyorjon K."
   const shortName = n => { const p = String(n || "").trim().split(/\s+/).filter(Boolean); return !p.length ? "Nomsiz" : (p[0].slice(0, 24) + (p[1] ? " " + p[1][0].toUpperCase() + "." : "")); };
   // Haftalik reyting yozuvi: XP o'zgarganda, ko'pi bilan daqiqada bir marta
   async function pushBoard(force) {
     clearTimeout(bTimer); bTimer = null;
     const st = g.DY_APP && g.DY_APP.state(); if (!user || !fb || !st || !st.week || !(st.weekXp > 0)) return;
-    const key = st.week + ":" + st.weekXp + ":" + nameOf(); if (key === bSent) return;
+    const ph = phOf(st), key = st.week + ":" + st.weekXp + ":" + nameOf() + ":" + ph.length; if (key === bSent) return;
     const wait = 60000 - (Date.now() - bLast);
     if (!force && wait > 0) { bTimer = setTimeout(() => pushBoard(true), wait); return; }
     bLast = Date.now();
     try {
-      await fb.fs.setDoc(fb.fs.doc(db, "boards", st.week, "users", user.uid), { name: shortName(nameOf()), wxp: Math.round(st.weekXp), at: fb.fs.serverTimestamp() });
+      await fb.fs.setDoc(fb.fs.doc(db, "boards", st.week, "users", user.uid), Object.assign({ name: shortName(nameOf()), wxp: Math.round(st.weekXp), at: fb.fs.serverTimestamp() }, ph ? { ph } : {}));
       bSent = key; bcache = null;
     } catch (e) { bTimer = setTimeout(() => pushBoard(true), 30000); }
   }
@@ -2278,7 +2281,7 @@ window.YETAKLA_FIREBASE = {
       const st = g.DY_APP.state(), wk = st.week;
       const c = this.boardCache(); if (c && c.week === wk) return c;
       try {
-        if (bTimer || (st.weekXp > 0 && bSent !== wk + ":" + st.weekXp + ":" + nameOf())) await pushBoard(true);
+        if (bTimer || (st.weekXp > 0 && bSent !== wk + ":" + st.weekXp + ":" + nameOf() + ":" + phOf(st).length)) await pushBoard(true);
         const col = fb.fs.collection(db, "boards", wk, "users");
         const snap = await fb.fs.getDocs(fb.fs.query(col, fb.fs.orderBy("wxp", "desc"), fb.fs.limit(50)));
         const rows = []; snap.forEach(d => rows.push(Object.assign({ id: d.id }, d.data())));
@@ -2299,12 +2302,12 @@ window.YETAKLA_FIREBASE = {
       const c = this.friendsCache(); if (c) return c;
       try {
         const st = g.DY_APP.state(), wk = st.week;
-        if (bTimer || (st.weekXp > 0 && bSent !== wk + ":" + st.weekXp + ":" + nameOf())) await pushBoard(true);
+        if (bTimer || (st.weekXp > 0 && bSent !== wk + ":" + st.weekXp + ":" + nameOf() + ":" + phOf(st).length)) await pushBoard(true);
         if (!refIds.length) await refs();
         const ids = Array.from(new Set([].concat(refIds, st.refBy ? [st.refBy] : []))).filter(x => x !== user.uid).slice(0, 40);
         const docs = await Promise.all([user.uid].concat(ids).map(id => fb.fs.getDoc(fb.fs.doc(db, "boards", wk, "users", id)).then(d => d.exists() ? Object.assign({ id }, d.data()) : null).catch(() => null)));
         const rows = docs.filter(Boolean);
-        if (!rows.some(r => r.id === user.uid)) rows.push({ id: user.uid, name: shortName(nameOf()), wxp: Math.round(st.weekXp || 0) });
+        if (!rows.some(r => r.id === user.uid)) rows.push({ id: user.uid, name: shortName(nameOf()), wxp: Math.round(st.weekXp || 0), ph: phOf(st) });
         fcache = { t: Date.now(), uid: user.uid, rows, count: ids.length, idle: ids.length - rows.filter(r => r.id !== user.uid).length };
         return fcache;
       } catch (e) { return { error: true }; }
@@ -2886,7 +2889,8 @@ window.YETAKLA_FIREBASE = {
   const myName = () => { const C = window.DY_CLOUD, u = C && C.user(); return String(S.name || (u && u.displayName) || "").trim(); };
   let allBadges = false;
   // Profil rasmi: qurilmada kichraytirilgan JPEG (data:) yoki Google rasmi (https)
-  const photoSrc = () => { const p = String(S.photo || ""); return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p) || /^https:\/\/lh\d\.googleusercontent\.com\//.test(p) ? p : ""; };
+  const okPhoto = p => { p = String(p || ""); return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p) || /^https:\/\/lh\d\.googleusercontent\.com\/[^"'<>\s]*$/.test(p) ? p : ""; };
+  const photoSrc = () => okPhoto(S.photo);
   function editPhoto() {
     const C = window.DY_CLOUD, u = C && C.user(), g = u && u.photoURL && /^https:\/\/lh\d\.googleusercontent\.com\//.test(u.photoURL) ? u.photoURL : "";
     const m = document.createElement("div"); m.className = "sheet-modal";
@@ -2917,7 +2921,15 @@ window.YETAKLA_FIREBASE = {
     im.onerror = () => { URL.revokeObjectURL(url); if (err) { err.style.color = ""; err.textContent = "Rasmni ochib bo'lmadi. Boshqa rasm tanlang (JPG yoki PNG)."; } };
     im.src = url;
   }
-  function setPhoto(v) { S.photo = v; S.photoAt = Date.now(); save(); document.querySelectorAll(".sheet-modal").forEach(x => x.remove()); renderHome(); toastNow(v ? "Rasm saqlandi" : "Rasm olib tashlandi", "📷"); }
+  // Reyting uchun kichik nusxa (64px), Google rasmi uchun kichik o'lcham havolasi
+  function thumbOf(v) {
+    return new Promise(res => {
+      if (!v) return res("");
+      if (/^https:/.test(v)) return res(v.replace(/=s\d+(-c)?$/, "") + "=s96-c");
+      const im = new Image(); im.onload = () => { const cv = document.createElement("canvas"); cv.width = cv.height = 64; cv.getContext("2d").drawImage(im, 0, 0, 64, 64); res(cv.toDataURL("image/jpeg", 0.72)); }; im.onerror = () => res(""); im.src = v;
+    });
+  }
+  async function setPhoto(v) { S.photo = v; S.photoSm = await thumbOf(v); S.photoAt = Date.now(); save(); if (window.DY_CLOUD && window.DY_CLOUD.nameChanged) window.DY_CLOUD.nameChanged(); document.querySelectorAll(".sheet-modal").forEach(x => x.remove()); renderHome(); toastNow(v ? "Rasm saqlandi" : "Rasm olib tashlandi", "📷"); }
   function profileHTML() {
     const C = window.DY_CLOUD, u = C && C.user(), nm = myName();
     const ti = TIERS.reduce((a, t, i) => S.xp >= t[1] ? i : a, 0), cur = TIERS[ti];
@@ -2993,11 +3005,12 @@ window.YETAKLA_FIREBASE = {
       <div class="card course soon"><span class="ic">${I.lock}</span><span class="txt"><b>Yangi yo'nalishlar</b><small>Tez kunda</small></span></div>
     </div>`;
   }
+  const avHTML = r => { const ph = okPhoto(r.ph); return `<span class="av">${ph ? `<img src="${esc(ph)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : esc((r.name || "?").trim()[0] || "?").toUpperCase()}</span>`; };
   function rankRows(d) {
     if (!d) return `<div class="card muted">Yuklanmoqda…</div>`;
     if (d.error) return `<div class="card muted">Reytingni yuklab bo'lmadi. Internetni tekshirib, qayta oching.</div>`;
     if (!d.rows.length) return `<div class="card muted">Bu hafta hali hech kim XP yig'magan. Birinchi bo'ling!</div>`;
-    let h = `<ol class="rank">${d.rows.map((r, i) => `<li class="${r.id === d.uid ? "me" : ""}"><span class="pos p${i + 1}">${i + 1}</span><span class="av">${esc((r.name || "?").trim()[0] || "?").toUpperCase()}</span><b>${esc(r.name || "Nomsiz")}</b><span class="x">${r.wxp} XP</span></li>`).join("")}</ol>`;
+    let h = `<ol class="rank">${d.rows.map((r, i) => `<li class="${r.id === d.uid ? "me" : ""}"><span class="pos p${i + 1}">${i + 1}</span>${avHTML(r)}<b>${esc(r.name || "Nomsiz")}</b><span class="x">${r.wxp} XP</span></li>`).join("")}</ol>`;
     if (!d.rows.some(r => r.id === d.uid)) h += `<div class="card me-row">${d.me ? `Sizning o'rningiz: <b>${d.me.rank}</b> · ${d.me.wxp} XP` : "Bu hafta dars o'tib, reytingga kiring."}</div>`;
     return h;
   }
@@ -3016,7 +3029,7 @@ window.YETAKLA_FIREBASE = {
     if (d.error) return `<div class="card muted">Do'stlar ro'yxatini yuklab bo'lmadi. Internetni tekshirib, qayta oching.</div>`;
     if (!d.count) return inv;
     const rows = d.rows.slice().sort((a, b) => b.wxp - a.wxp);
-    return `<ol class="rank">${rows.map((r, i) => `<li class="${r.id === d.uid ? "me" : ""}"><span class="pos p${i + 1}">${i + 1}</span><span class="av">${esc((r.name || "?").trim()[0] || "?").toUpperCase()}</span><b>${esc(r.name || "Nomsiz")}</b><span class="x">${r.wxp} XP</span></li>`).join("")}</ol>${d.idle ? `<p class="muted" style="text-align:center">Yana ${d.idle} ta do'stingiz bu hafta hali o'qimagan.</p>` : ""}${inv}`;
+    return `<ol class="rank">${rows.map((r, i) => `<li class="${r.id === d.uid ? "me" : ""}"><span class="pos p${i + 1}">${i + 1}</span>${avHTML(r)}<b>${esc(r.name || "Nomsiz")}</b><span class="x">${r.wxp} XP</span></li>`).join("")}</ol>${d.idle ? `<p class="muted" style="text-align:center">Yana ${d.idle} ta do'stingiz bu hafta hali o'qimagan.</p>` : ""}${inv}`;
   }
   function renderHome() {
     document.body.classList.remove("in-lesson");
@@ -3665,6 +3678,7 @@ ${P.out.map((o, i) => `<h2>${i + 1}. ${esc(o.task)}</h2><pre>${esc(o.sql)}</pre>
     session = null; tab = st.tab || "home"; openLesson = null; modal = null; renderHome(); window.scrollTo(0, 0);
   });
   load();
+  if (S.photo && !S.photoSm) thumbOf(S.photo).then(t => { S.photoSm = t; save(); });
   try { history.replaceState({ tab: "home" }, ""); } catch (e) { /* iframe */ }
   if (!S.onboarded) renderOnboard(1); else renderHome();
   window.DY_APP = { state: () => S, startLesson, cur: () => session && session.q[session.i], version: "1.3", musicOn: () => !!mTimer && !mOff,
