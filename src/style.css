@@ -575,3 +575,7 @@ i.bar > i { display: block; height: 100%; border-radius: 4px; background: var(--
 .emo-grid button:active { transform: scale(.92); }
 .emo-grid button.on { border-color: var(--sky); }
 .btn.ghost.danger { color: var(--heart); border-color: color-mix(in srgb, var(--heart) 45%, var(--line)); --bd: color-mix(in srgb, var(--heart) 35%, var(--line)); }
+/* Jonli Python */
+.editor.py { min-height: 150px; font-size: 15px; tab-size: 4; white-space: pre; overflow-x: auto; }
+.out .pyprint { margin: 0; background: var(--code-bg); color: var(--code-ink); border-radius: 10px; padding: 10px 12px; font-family: var(--f-mono); font-size: 13px; white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; }
+.fb .ans code.pyans { display: block; margin-top: 6px; padding: 8px 10px; white-space: pre-wrap; font-weight: 600; font-size: 13px; }

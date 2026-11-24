@@ -432,6 +432,205 @@
     return x.every((v, i) => v === y[i]);
   }
 
+  /* ---------- Python engine (Pyodide, Web Worker ichida) ---------- */
+  const PYO = "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/";
+  const PY_HELPER = String.raw`
+import ast, io, sys, json, math, contextlib
+
+def _yt_run(src, out):
+    g = {"__name__": "__main__"}
+    tree = ast.parse(src, "<kod>")
+    last = None
+    if tree.body and isinstance(tree.body[-1], ast.Expr):
+        last = ast.Expression(tree.body.pop().value)
+    val = None
+    with contextlib.redirect_stdout(out):
+        exec(compile(tree, "<kod>", "exec"), g)
+        if last is not None:
+            val = eval(compile(last, "<kod>", "eval"), g)
+    return g, val
+
+def _yt_cell(v):
+    np = sys.modules.get("numpy")
+    if np is not None and isinstance(v, np.generic):
+        v = v.item()
+    if isinstance(v, float):
+        if math.isnan(v):
+            return None
+        return round(v, 6)
+    if v is None or isinstance(v, (bool, int, str)):
+        return v
+    return str(v)
+
+def _yt_frame(v):
+    pd = sys.modules.get("pandas")
+    if pd is None:
+        return None
+    if isinstance(v, pd.Series):
+        v = v.to_frame(name=v.name if v.name is not None else "qiymat")
+    if isinstance(v, pd.DataFrame):
+        if isinstance(v.index, pd.MultiIndex) or v.index.name is not None:
+            v = v.reset_index()
+        cols = [str(c) for c in v.columns]
+        rows = [[_yt_cell(x) for x in r] for r in v.itertuples(index=False, name=None)]
+        return cols, rows
+    return None
+
+def _yt_norm(x):
+    f = _yt_frame(x)
+    if f is not None:
+        return ("t", f)
+    if isinstance(x, (list, tuple)):
+        return ("l", [_yt_cell(i) for i in x])
+    return ("v", _yt_cell(x))
+
+def _yt_eq(a, b):
+    num = lambda z: isinstance(z, (int, float)) and not isinstance(z, bool)
+    if num(a) and num(b):
+        return abs(a - b) <= 1e-6 * max(1, abs(b))
+    if isinstance(a, str) and isinstance(b, str):
+        return a.strip() == b.strip()
+    return a == b
+
+def _yt_rows_eq(ra, rb):
+    return all(len(x) == len(y) and all(_yt_eq(p, q) for p, q in zip(x, y)) for x, y in zip(ra, rb))
+
+def _yt_same(a, b, ordered):
+    if a[0] != b[0]:
+        return False
+    if a[0] == "t":
+        (ca, ra), (cb, rb) = a[1], b[1]
+        if len(ca) != len(cb) or len(ra) != len(rb):
+            return False
+        if not ordered:
+            k = lambda r: json.dumps(r, default=str)
+            ra, rb = sorted(ra, key=k), sorted(rb, key=k)
+        return _yt_rows_eq(ra, rb)
+    if a[0] == "l":
+        return len(a[1]) == len(b[1]) and _yt_rows_eq([a[1]], [b[1]])
+    return _yt_eq(a[1], b[1])
+
+def _yt_short(n):
+    if n[0] == "t":
+        return "%d qator (%s)" % (len(n[1][1]), ", ".join(n[1][0]))
+    return str(n[1])
+
+def _yt_show(x):
+    f = _yt_frame(x)
+    if f is not None:
+        return {"table": {"cols": f[0], "rows": f[1][:50], "n": len(f[1])}}
+    if isinstance(x, (list, tuple, dict, set)):
+        return {"val": repr(x)[:2000]}
+    c = _yt_cell(x)
+    return {"val": repr(c) if isinstance(c, str) else str(c)}
+
+def yt_exec(src, sol, var, ordered):
+    res = {"out": "", "ok": False}
+    out = io.StringIO()
+    try:
+        g, val = _yt_run(src, out)
+    except SyntaxError as e:
+        res["out"] = out.getvalue()[:4000]
+        res["error"] = {"type": type(e).__name__, "msg": str(e.msg), "line": e.lineno}
+        return json.dumps(res, default=str)
+    except BaseException as e:
+        line, tb = None, e.__traceback__
+        while tb is not None:
+            if tb.tb_frame.f_code.co_filename == "<kod>":
+                line = tb.tb_lineno
+            tb = tb.tb_next
+        res["out"] = out.getvalue()[:4000]
+        res["error"] = {"type": type(e).__name__, "msg": str(e), "line": line}
+        return json.dumps(res, default=str)
+    res["out"] = out.getvalue()[:4000]
+    shown = g[var] if var and var in g else val
+    if shown is not None:
+        res.update(_yt_show(shown))
+        if var and var in g:
+            res["name"] = var
+    if sol:
+        o2 = io.StringIO()
+        gs, vs = _yt_run(sol, o2)
+        if var:
+            if var not in g:
+                res["missing"] = var
+            else:
+                a, b = _yt_norm(g[var]), _yt_norm(gs[var])
+                res["ok"] = _yt_same(a, b, ordered)
+                res["got"], res["exp"] = _yt_short(a), _yt_short(b)
+        else:
+            res["ok"] = out.getvalue().strip() == o2.getvalue().strip()
+            res["got"], res["exp"] = out.getvalue().strip()[:200], o2.getvalue().strip()[:200]
+    return json.dumps(res, default=str)
+`;
+  const PY_WORKER = `let py=null;
+self.onmessage=async e=>{const m=e.data;try{
+if(m.op==="init"){importScripts(m.base+"pyodide.js");py=await loadPyodide({indexURL:m.base});for(const n in m.files)py.FS.writeFile(n,m.files[n]);py.runPython(m.helper);postMessage({id:m.id,ok:true});}
+else if(m.op==="pkgs"){await py.loadPackage(m.pkgs);postMessage({id:m.id,ok:true});}
+else if(m.op==="run"){await py.loadPackagesFromImports(m.src);const f=py.globals.get("yt_exec");const r=f(m.src,m.sol||"",m.v||"",!!m.ord);f.destroy();postMessage({id:m.id,ok:true,res:r});}
+}catch(err){postMessage({id:m.id,ok:false,err:String(err&&err.message||err)});}};`;
+  let pyW = null, pyP = null, pdP = null, pyReady = false, pySeq = 0; const pyCb = {};
+  function pyKill() {
+    if (pyW) pyW.terminate(); pyW = null; pyP = null; pdP = null; pyReady = false;
+    for (const k in pyCb) { pyCb[k].rej(new Error("to'xtatildi")); delete pyCb[k]; }
+  }
+  function pyCall(msg, ms) {
+    return new Promise((res, rej) => {
+      if (!pyW) return rej(new Error("Python ishga tushmagan"));
+      const id = ++pySeq;
+      const t = setTimeout(() => { delete pyCb[id]; pyKill(); rej(Object.assign(new Error("timeout"), { timeout: true })); }, ms);
+      pyCb[id] = { res: v => { clearTimeout(t); res(v); }, rej: e => { clearTimeout(t); rej(e); } };
+      pyW.postMessage(Object.assign({ id }, msg));
+    });
+  }
+  const csvOf = t => { const q = v => v === null ? "" : typeof v === "string" && /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : String(v); return [t.cols.join(",")].concat(t.rows.map(r => r.map(q).join(","))).join("\n") + "\n"; };
+  function loadPy() {
+    if (pyP) return pyP;
+    const p = pyP = (async () => {
+      pyW = new Worker(URL.createObjectURL(new Blob([PY_WORKER], { type: "text/javascript" })));
+      pyW.onmessage = e => { const m = e.data, cb = pyCb[m.id]; if (!cb) return; delete pyCb[m.id]; m.ok ? cb.res(m.res) : cb.rej(new Error(m.err)); };
+      pyW.onerror = e => { if (e.preventDefault) e.preventDefault(); const err = new Error(e.message || "Python xatosi"); for (const k in pyCb) { pyCb[k].rej(err); delete pyCb[k]; } };
+      const files = {}; for (const [t, d] of Object.entries(DATA)) files[t + ".csv"] = csvOf(d);
+      await pyCall({ op: "init", base: PYO, files, helper: PY_HELPER }, 180000);
+      pyReady = true;
+    })();
+    p.catch(() => { if (pyP === p) pyKill(); });
+    return p;
+  }
+  const needsPd = s => /\b(import\s+pandas|from\s+pandas)\b/.test(s || "");
+  function loadPd() {
+    if (pdP) return pdP;
+    const p = pdP = loadPy().then(() => pyCall({ op: "pkgs", pkgs: ["pandas"] }, 180000));
+    p.catch(() => { if (pdP === p) pdP = null; });
+    return p;
+  }
+  function pyWarm(steps) {
+    const ps = steps.filter(s => s.t === "py"); if (!ps.length) return;
+    (ps.some(s => needsPd(s.solution)) ? loadPd() : loadPy()).catch(() => { });
+  }
+  async function runPy(src, sol, v, ord) {
+    try { await (needsPd(src) || needsPd(sol) ? loadPd() : loadPy()); }
+    catch (e) { throw Object.assign(new Error("Python yuklanmadi. Internetni tekshirib, qayta urinib ko'ring."), { load: true }); }
+    try { return JSON.parse(await pyCall({ op: "run", src, sol, v, ord }, 20000)); }
+    catch (e) { if (e.timeout) return { out: "", error: { type: "Timeout", msg: "Kod juda uzoq ishladi, cheksiz sikl bo'lishi mumkin. Python qayta ishga tushiriladi." } }; throw e; }
+  }
+  const pyErr = e => {
+    const m = String(e.msg || ""); let h = "";
+    const nm = (/'([^']+)'/.exec(m) || [])[1];
+    if (e.type === "Timeout") return m;
+    if (nm && /^_+$/.test(nm)) return "___ o'rniga kod yozing.";
+    if (e.type === "NameError") h = `Bunday nom topilmadi${nm ? `: ${nm}` : ""}. O'zgaruvchi yoki funksiya nomini tekshiring (katta-kichik harf ham muhim).`;
+    else if (e.type === "KeyError") h = `Bunday ustun yoki kalit yo'q${nm ? `: ${nm}` : ""}. Ustun nomini qo'shtirnoq ichida aniq yozing.`;
+    else if (e.type === "IndentationError" || e.type === "TabError") h = "Chekinish xatosi: blok ichidagi qatorlar bir xil (4 ta bo'sh joy) surilgan bo'lsin.";
+    else if (e.type === "SyntaxError") h = "Sintaksis xatosi: qavslar, qo'shtirnoq, ikki nuqta (:) va = belgisini tekshiring.";
+    else if (e.type === "AttributeError") h = "Bunday metod yoki xususiyat yo'q. Nomini tekshiring (masalan, .mean(), .sum()).";
+    else if (e.type === "TypeError") h = "Turlar mos emas: masalan, matn bilan sonni qo'shib bo'lmaydi yoki funksiyaga noto'g'ri argument berildi.";
+    else if (e.type === "ZeroDivisionError") h = "Nolga bo'lib bo'lmaydi.";
+    else if (e.type === "FileNotFoundError") h = "Fayl topilmadi. Fayl nomini tekshiring, masalan \"safarlar.csv\".";
+    else if (e.type === "ModuleNotFoundError") h = "Bunday kutubxona topilmadi. Bu yerda pandas va numpy mavjud.";
+    return (h ? h + "\n" : "") + `${e.type}${e.line ? ` (${e.line}-qator)` : ""}: ${m}`;
+  };
+
   /* ---------- visuals ---------- */
   function tableHTML(t, extraCls = "") {
     return `<div class="tblwrap ${extraCls}"><table class="t"><thead><tr>${t.cols.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${t.rows.map((r, i) => `<tr class="${t.hlRow === i ? "hl" : ""}">${r.map(v => `<td>${v === null ? '<i style="color:var(--muted)">NULL</i>' : fmt(v)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
@@ -747,6 +946,7 @@
     const q = expand(l);
     const due = Object.entries(S.pool).filter(([k, v]) => v.due <= S.lessonsDone && EX[k] && EX[k].l.id !== l.id).slice(0, 2);
     due.forEach(([k]) => q.push(Object.assign({ id: k, review: true }, EX[k].st)));
+    pyWarm(q);
     session = { kind: "lesson", l, sec, q, i: 0, total: q.filter(s => s.t !== "theory").length, firstOk: 0, wrongIds: new Set(), seen: new Set(), t0: Date.now(), xp: 0, retry: S.done[l.id] ? true : false };
     renderStep();
   }
@@ -767,7 +967,7 @@
     renderStep();
   }
 
-  const KIND = { mc: "Bitta javobni tanlang", predict: "Natijani taxmin qiling", tf: "To'g'rimi yoki noto'g'ri?", match: "Juftlarni moslang", fill: "Bo'sh joyni to'ldiring", order: "Bloklardan yig'ing", sql: "Jonli SQL", formula: "Jonli formula", chart: "Grafikni tanlang", bug: "Xatoni toping", theory: "Yangi mavzu" };
+  const KIND = { mc: "Bitta javobni tanlang", predict: "Natijani taxmin qiling", tf: "To'g'rimi yoki noto'g'ri?", match: "Juftlarni moslang", fill: "Bo'sh joyni to'ldiring", order: "Bloklardan yig'ing", sql: "Jonli SQL", py: "Jonli Python", formula: "Jonli formula", chart: "Grafikni tanlang", bug: "Xatoni toping", theory: "Yangi mavzu" };
   let ctl = null, phase = "answer";
   function lessonShell(inner, foot) {
     const done = session.i; const pct = Math.round(done / session.q.length * 100);
@@ -831,6 +1031,10 @@
         <div class="schema">${st.tables.map(t => `<button data-peek="${t}">${I.db.replace("<svg", '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"')}${t}</button>`).join("")}<button data-peek="__all">barcha jadvallar</button><div class="cols" id="schemacols">${st.tables.map(t => `${t}(${DATA[t].cols.join(", ")})`).join("<br>")}</div></div>
         <textarea class="editor" id="sqled" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="SQL so'rov">${esc(st._draft ?? st.starter ?? "")}</textarea>
         <div class="row"><button class="btn sky sm" data-act="run">▶ Ishga tushirish</button><span class="loading" id="sqlstat"></span></div><div class="out" id="sqlout"></div>`;
+      case "py": return `<p class="q">${esc(st.task)}</p>
+        ${st.tables ? `<div class="schema">${st.tables.map(t => `<button data-peek="${t}">${I.db.replace("<svg", '<svg style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"')}${t}.csv</button>`).join("")}<div class="cols" id="schemacols">${st.tables.map(t => `${t}.csv: ${DATA[t].cols.join(", ")}`).join("<br>")}</div></div>` : ""}
+        <textarea class="editor py" id="pyed" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Python kod">${esc(st._draft ?? st.starter ?? "")}</textarea>
+        <div class="row"><button class="btn sky sm" data-act="pyrun">▶ Ishga tushirish</button><span class="loading" id="pystat"></span></div><div class="out" id="pyout"></div>`;
       case "formula": return `<p class="q">${esc(st.task)}</p><div id="fsheet">${sheetHTML(st.sheet, { target: st.target })}</div>
         <div class="fxinput"><span class="cell">${st.target}</span><em>fx</em><input id="fxin" value="${esc(st._draft ?? "=")}" spellcheck="false" autocapitalize="characters" autocomplete="off" aria-label="Formula"></div>
         <div class="fxhelp">${(st.keys || ["=", "SUM(", "AVERAGE(", "COUNT(", "MIN(", "MAX(", "IF(", "COUNTIF(", "SUMIF(", "VLOOKUP(", "XLOOKUP(", ":", ",", "\"", ")", "*", "/", "+", ">="]).map(k => `<button data-ins="${esc(k)}">${esc(k)}</button>`).join("")}</div>
@@ -916,6 +1120,52 @@
       };
       c.answer = st.solution; c.code = true;
     }
+    if (st.t === "py") {
+      const ed = document.getElementById("pyed"), out = document.getElementById("pyout"), stat = document.getElementById("pystat");
+      ed.oninput = () => { st._draft = ed.value; refreshCheck(); };
+      ed.onkeydown = e => {
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); run().catch(() => { }); return; }
+        if (e.key === "Tab" && !e.shiftKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); const s = ed.selectionStart, en = ed.selectionEnd; ed.value = ed.value.slice(0, s) + "    " + ed.value.slice(en); ed.setSelectionRange(s + 4, s + 4); ed.oninput(); }
+      };
+      const show = r => {
+        let h = "";
+        if (r.error) { if (r.out) h += `<span class="meta">Chop etildi (print)</span><pre class="pyprint">${esc(r.out)}</pre>`; h += `<div class="err">${esc(pyErr(r.error))}</div>`; }
+        else {
+          if (r.table) h += `<span class="meta">${r.name ? esc(r.name) + ": " : "Natija: "}${r.table.n} qator${r.table.n > 50 ? " (birinchi 50 tasi)" : ""}</span>` + tableHTML(r.table);
+          else if (r.out) h += `<span class="meta">Chop etildi (print)</span><pre class="pyprint">${esc(r.out)}</pre>`;
+          else if (r.val != null) h += `<span class="meta">${r.name ? esc(r.name) : "Qiymat"}</span><pre class="pyprint">${esc(r.val)}</pre>`;
+          if (!h) h = '<span class="meta">Kod xatosiz ishladi, lekin hech narsa chiqmadi. Natijani ko\'rish uchun print(...) qo\'shing.</span>';
+        }
+        out.innerHTML = h;
+      };
+      let running = null;
+      const run = (withSol) => {
+        if (running) return running;
+        stat.textContent = pyReady ? "Bajarilmoqda…" : "Python yuklanmoqda… (birinchi marta ~15 MB)";
+        const p = running = runPy(ed.value, withSol ? st.solution : "", st.v, !!st.ord)
+          .then(r => { stat.textContent = ""; show(r); return r; },
+            e => { stat.textContent = ""; out.innerHTML = `<div class="err">${esc(e && e.load ? e.message : "Kodni ishga tushirib bo'lmadi: " + (e && e.message || e))}</div>`; throw e; })
+          .finally(() => { if (running === p) running = null; });
+        return p;
+      };
+      body.querySelector('[data-act="pyrun"]').onclick = () => run().catch(() => { });
+      body.querySelectorAll("[data-peek]").forEach(b => b.onclick = () => {
+        const t = DATA[b.dataset.peek];
+        out.innerHTML = `<span class="meta">${esc(b.dataset.peek)}.csv faylidan namuna (5 qator)</span>` + tableHTML({ cols: t.cols, rows: t.rows.slice(0, 5) });
+      });
+      pyWarm([st]);
+      c.ready = () => ed.value.trim().length > 3;
+      c.check = async () => {
+        if (/___/.test(ed.value)) return { ok: false, soft: true, msg: "___ o'rniga kod yozing." };
+        let r;
+        try { if (running) await running.catch(() => { }); r = await run(true); }
+        catch (e) { if (e && e.load) return { ok: true, msg: "Python yuklanmadi, shuning uchun bu mashq tekshirilmadi. Internet yaxshilanganda qayta urinib ko'ring." }; return { ok: false, soft: true, msg: "Kodni ishga tushirib bo'lmadi. Qayta urinib ko'ring." }; }
+        if (r.error) return { ok: false, soft: true, msg: "Kodda xato bor. Pastdagi qizil xabarni o'qib, tuzating." };
+        if (r.missing) return { ok: false, soft: true, msg: `${r.missing} o'zgaruvchisi topilmadi. Natijani ${r.missing} = ... ko'rinishida yozing.` };
+        return { ok: !!r.ok, msg: r.ok ? "" : r.got === r.exp && /qator/.test(r.got || "") ? `Natija shakli to'g'ri (${r.got}), lekin qiymatlar boshqacha. Hisoblashni tekshiring.` : `Sizning natijangiz: ${r.got}. Kutilgan: ${r.exp}.` };
+      };
+      c.answer = st.solution; c.code = true;
+    }
     if (st.t === "formula") {
       const inp = document.getElementById("fxin"), prev = document.getElementById("fxprev"), wrap = document.getElementById("fsheet");
       const upd = () => {
@@ -973,7 +1223,7 @@
       if (session.kind === "practice" && S.hearts < 5) S.hearts++;
       if (st.review) { const p = S.pool[st.id]; if (p && first) { p.box++; if (p.box >= 3) delete S.pool[st.id]; else { p.due = S.lessonsDone + 2; const d = new Date(); d.setDate(d.getDate() + (p.box === 1 ? 1 : 3)); p.day = dayStr(d); } } if (wasMistake && first) { S.reviewsOk++; questEv("review"); } }
       questEv("combo", session.combo);
-      if (st.t === "sql" || st.t === "formula") questEv("live");
+      if (st.t === "sql" || st.t === "formula" || st.t === "py") questEv("live");
       if (st.t === "sql" && session.kind === "lesson" && session.l.id === FINAL) { const ed = document.getElementById("sqled"); if (ed) S.port[st.id] = ed.value.slice(0, 4000); }
     } else {
       session.combo = 0; sfx("bad");
@@ -990,7 +1240,7 @@
     const why = st.why ? `<span>${esc(st.why)}</span>` : "";
     const fb = r.ok
       ? `<div class="fb good"><div class="head">${mascot("happy")}<h3>${pick(PRAISE)}</h3></div><div class="txt">${why}${use ? `<span class="use"><b>Ishda:</b> ${esc(use)}</span>` : ""}</div><button class="btn" data-act="next">Davom etish</button></div>`
-      : `<div class="fb bad"><div class="head">${mascot("sad")}<h3>${pick(CHEER)}</h3></div><div class="txt">${st.t === "match" ? `<span>${esc(r.msg)} Juftlar keyinroq yana chiqadi.</span>` : `<span class="ans">To'g'ri javob: ${ctl.code ? `<code>${esc(ctl.answer)}</code>` : esc(ctl.answer)}</span>`}${r.msg && st.t !== "match" ? `<span>${esc(r.msg)}</span>` : ""}${why}</div><button class="btn" data-act="next">Tushundim</button></div>`;
+      : `<div class="fb bad"><div class="head">${mascot("sad")}<h3>${pick(CHEER)}</h3></div><div class="txt">${st.t === "match" ? `<span>${esc(r.msg)} Juftlar keyinroq yana chiqadi.</span>` : `<span class="ans">To'g'ri javob: ${ctl.code ? `<code${st.t === "py" ? ' class="pyans"' : ""}>${esc(ctl.answer)}</code>` : esc(ctl.answer)}</span>`}${r.msg && st.t !== "match" ? `<span>${esc(r.msg)}</span>` : ""}${why}</div><button class="btn" data-act="next">Tushundim</button></div>`;
     document.getElementById("lfoot").innerHTML = fb;
     const hp = document.querySelector(".lbar .stat.hp"); if (hp) hp.innerHTML = hpLabel();
     document.getElementById("lbody").querySelectorAll("button,textarea,input").forEach(x => { if (!x.closest(".schema")) x.disabled = true; });
