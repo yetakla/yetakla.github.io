@@ -4,7 +4,7 @@
   const COURSE = window.DY_COURSE, DATA = window.DY_DATA, F = window.DY_FORMULA;
   const $app = document.getElementById("app");
   const KEY = "datayol_v1";
-  const MASCOT = "Bilimdon"; // maskot ismi — bitta joyda
+  const MASCOT = "Bilag'on"; // maskot ismi — bitta joyda
 
   /* ---------- helpers ---------- */
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
