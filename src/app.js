@@ -101,7 +101,7 @@
   }
 
   /* ---------- state ---------- */
-  const fresh = () => ({ v: 1, xp: 0, todayXp: 0, today: dayStr(), goal: null, streak: 0, bestStreak: 0, lastDay: null, hearts: 5, done: {}, lessonsDone: 0, pool: {}, badges: {}, sound: true, formulasOk: 0, reviewsOk: 0, onboarded: false, week: "", weekXp: 0 });
+  const fresh = () => ({ v: 1, xp: 0, todayXp: 0, today: dayStr(), goal: null, streak: 0, bestStreak: 0, lastDay: null, hearts: 5, done: {}, lessonsDone: 0, pool: {}, badges: {}, sound: true, formulasOk: 0, reviewsOk: 0, onboarded: false, week: "", weekXp: 0, music: true });
   let S;
   function load() {
     try { const raw = localStorage.getItem(KEY); S = raw ? Object.assign(fresh(), JSON.parse(raw)) : fresh(); } catch (e) { S = fresh(); }
@@ -280,10 +280,63 @@
           break; }
         case "badge": [4, 5, 6, 7].forEach((k, i) => bell(PENTA[k], t + i * 0.07, 0.6, 0.08)); noise(t, 0.5, { from: 7000, to: 11000, q: 3, vol: 0.02, att: 0.1 }); break;
         case "toggle": bell(PENTA[2], t, 0.25, 0.1); bell(PENTA[4], t + 0.07, 0.3, 0.1); break;
+        case "hello": { // Bilag'on qo'nganda: ikki chug'urlash + quvnoq kuy
+          [0, 0.13].forEach(d => { tone(2300, t + d, 0.07, { vol: 0.05, to: 3300 }); tone(3100, t + d + 0.05, 0.06, { vol: 0.035, to: 2500 }); });
+          [[0, 0.32], [2, 0.42], [4, 0.52], [3, 0.62], [5, 0.74]].forEach(([k, d]) => bell(PENTA[k], t + d, 0.45, 0.085));
+          [261.63, 329.63, 392].forEach(f => tone(f, t + 0.74, 1.1, { type: "triangle", vol: 0.03, att: 0.04, rev: true }));
+          break; }
+        case "fanfare": { // bo'lim tugadi yoki yangi liga
+          [[0, 0], [2, 0.12], [4, 0.24], [5, 0.36]].forEach(([k, d]) => { bell(PENTA[k], t + d, 0.4, 0.11); tone(PENTA[k] / 2, t + d, 0.3, { type: "triangle", vol: 0.04 }); });
+          [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => tone(f, t + 0.52 + i * 0.015, 1.8, { type: "triangle", vol: 0.04, att: 0.03, rev: true }));
+          [130.81, 196].forEach(f => tone(f, t + 0.52, 1.6, { type: "sine", vol: 0.07, att: 0.02 }));
+          for (let i = 0; i < 10; i++) bell(PENTA[2 + (i % 6)] * 2, t + 0.6 + i * 0.055, 0.25, 0.025);
+          noise(t + 0.5, 0.9, { from: 6000, to: 11000, q: 2, vol: 0.025, att: 0.15 });
+          break; }
         default: tone(660, t, 0.08, { vol: 0.08 });
       }
     } catch (e) { /* ovoz yo'q */ }
   }
+  /* ---------- fon musiqasi: tinch, generativ (C-dur pentatonika) ---------- */
+  let mGain = null, mTimer = null, mNext = 0, mStep = 0, mIdx = 3, mOff = null;
+  const CHORDS = [[261.63, 329.63, 392], [220, 261.63, 329.63], [174.61, 220, 261.63], [196, 246.94, 293.66]]; // C Am F G
+  const HALF = 60 / 70 / 2;
+  function mtone(f, at, dur, type, vol, att, rev) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, at);
+    g.gain.setValueAtTime(0.0001, at); g.gain.linearRampToValueAtTime(vol, at + att); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g); g.connect(mGain); if (rev) g.connect(wet);
+    o.start(at); o.stop(at + dur + 0.05);
+  }
+  function musicTick() {
+    while (mNext < ac.currentTime + 0.7) {
+      const t = mNext, s = mStep % 8, ch = CHORDS[Math.floor(mStep / 8) % 4];
+      if (s === 0) { ch.forEach(f => mtone(f, t, HALF * 9, "triangle", 0.022, 0.9, true)); mtone(ch[0] / 2, t, HALF * 7, "sine", 0.05, 0.08); }
+      if (s === 4) mtone(ch[2] / 2, t, HALF * 3.5, "sine", 0.03, 0.08);
+      if (s % 2 === 0 ? Math.random() < 0.6 : Math.random() < 0.18) {
+        mIdx = Math.max(0, Math.min(7, mIdx + [-2, -1, -1, 0, 1, 1, 2][Math.floor(Math.random() * 7)]));
+        const f = PENTA[mIdx]; mtone(f, t, 0.9, "sine", 0.03, 0.01, true); mtone(f * 2.01, t, 0.4, "sine", 0.008, 0.01);
+      }
+      mNext += HALF; mStep++;
+    }
+  }
+  function musicSync() {
+    const want = !!S.music && !session && !document.hidden && !!S.onboarded;
+    try {
+      if (want) {
+        audio(); if (ac.state !== "running") return; // brauzer ruxsat bermadi: birinchi bosishda qayta uriniladi
+        if (!mGain) { mGain = ac.createGain(); mGain.gain.value = 0.0001; mGain.connect(master); }
+        clearTimeout(mOff); mOff = null;
+        if (!mTimer) { mNext = ac.currentTime + 0.1; mTimer = setInterval(musicTick, 150); musicTick(); }
+        mGain.gain.cancelScheduledValues(ac.currentTime); mGain.gain.setTargetAtTime(0.6, ac.currentTime, 0.8);
+      } else if (mTimer && mGain) {
+        mGain.gain.cancelScheduledValues(ac.currentTime); mGain.gain.setTargetAtTime(0.0001, ac.currentTime, 0.35);
+        clearTimeout(mOff); mOff = setTimeout(() => { clearInterval(mTimer); mTimer = null; }, 1800);
+      }
+    } catch (e) { /* ovoz yo'q */ }
+  }
+  document.addEventListener("visibilitychange", () => musicSync());
+  document.addEventListener("pointerdown", () => { if (S && S.music && !mTimer) setTimeout(musicSync, 0); }, true);
+
   // har bir tugma bosilishiga mos ovoz (capture: element hali DOM'da)
   document.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b || b.disabled) return;
@@ -453,6 +506,7 @@
       ${window.DY_CLOUD ? window.DY_CLOUD.card() : ""}
       <h3>Kunlik maqsad</h3><div class="goals" style="max-width:none">${g(20, "Yengil", "≈ 2 dars")}${g(50, "Jiddiy", "≈ 4 dars")}${g(100, "Kuchli", "≈ 8 dars")}</div>
       <div class="card toggle"><span>Ovoz effektlari</span><button class="switch ${S.sound ? "on" : ""}" data-act="sound" aria-label="Ovoz"></button></div>
+      <div class="card toggle"><span>Fon musiqasi <small class="muted" style="display:block;font-size:13px;font-weight:600">Asosiy sahifa va xaritada tinch kuy</small></span><button class="switch ${S.music ? "on" : ""}" data-act="music" aria-label="Fon musiqasi"></button></div>
       ${badgesHTML()}
       <div class="card"><h3>Kurs haqida</h3><p class="muted" style="margin-top:6px">11 bo'lim: analitik fikrlash → Excel → statistika → SQL → tozalash → Power BI → Tableau va Superset → Python → AI → karyera. Hozir ochiq bo'limlar: ${COURSE.filter(s => !s.soon).length} ta. Barcha misollar to'qima ma'lumotlar.</p></div>
       <div class="card"><p class="muted">${window.DY_CLOUD && window.DY_CLOUD.user() ? "Progress hisobingizda va shu brauzerda saqlanadi." : "Progress shu brauzerda saqlanadi."} Har kuni jonlar 5 taga to'ladi.</p><div class="row" style="margin-top:10px">${modal === "reset" ? `<button class="btn red sm" data-act="reset-yes">Ha, hammasini o'chir</button><button class="btn ghost sm" data-act="reset-no">Bekor</button>` : `<button class="btn ghost sm" data-act="reset">Progressni tozalash</button>`}</div></div>
@@ -499,7 +553,7 @@
   function renderHome() {
     document.body.classList.remove("in-lesson");
     $app.innerHTML = `<div class="app">${topbar()}${tab === "home" ? homeHTML() : tab === "map" ? mapHTML() : tab === "rank" ? rankHTML() : profileHTML()}</div>${tabbar()}`;
-    flushToasts();
+    flushToasts(); musicSync();
     const C = window.DY_CLOUD;
     if (tab === "rank" && C && C.user()) C.board().then(d => { const el = document.getElementById("rankbox"); if (el && tab === "rank" && d) el.innerHTML = rankRows(d); });
   }
@@ -521,7 +575,15 @@
   }
   function leaveLesson() { session = null; if (history.state && history.state.lesson) history.back(); else renderHome(); }
   function renderOnboard(step) {
-    setTimeout(() => { const l = document.getElementById("onb"); if (l && l.classList.contains("intro")) l.addEventListener("pointerdown", () => l.classList.add("skip"), { once: true }); }, 0);
+    setTimeout(() => {
+      const l = document.getElementById("onb"); if (!l || !l.classList.contains("intro")) return;
+      l.addEventListener("pointerdown", () => l.classList.add("skip"), { once: true });
+      // qo'nish payti salom kuyi; brauzer ovozga ruxsat bermasa — birinchi bosishda
+      let said = false; const hello = () => { if (said) return; said = true; sfx("hello"); };
+      const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      setTimeout(() => { try { audio(); if (ac.state === "running") hello(); } catch (e) { /* */ } }, reduce ? 0 : 1380);
+      l.addEventListener("pointerdown", hello, { once: true, capture: true });
+    }, 0);
     const sel = S.goal;
     if (step === "dir") {
       $app.innerHTML = `<div class="layer"><div class="center">${mascot("think", "float")}
@@ -577,6 +639,7 @@
   }
   function refreshCheck() { const b = document.getElementById("checkbtn"); if (b) b.disabled = !(ctl && ctl.ready()); }
   function renderStep() {
+    if (session && session.i === 0) musicSync();
     document.body.classList.add("in-lesson");
     if (session.i >= session.q.length) return finish();
     const st = session.q[session.i]; phase = "answer"; ctl = null;
@@ -803,8 +866,10 @@
       if (perfect) award("perfect");
       if (session.l.boss) award("boss");
     }
+    const tierOf = x => TIERS.reduce((a, t, i) => x >= t[1] ? i : a, 0), tier0 = tierOf(S.xp);
+    const secWas = session.kind === "lesson" && session.sec ? session.sec.lessons.filter(l => l.id !== session.l.id).every(l => isDone(l.id)) && !session.retry : false;
     const total = session.xp + bonus; addXp(total); checkBadges(); save();
-    sfx("done");
+    sfx(secWas || tierOf(S.xp) > tier0 ? "fanfare" : "done");
     const boss = session.l.boss && session.kind === "lesson";
     $app.innerHTML = `<div class="layer"><div class="center">${mascot("happy", "float")}
       <h1>${session.kind === "practice" ? "Takrorlash tugadi!" : boss ? "Boss yengildi! 👑" : "Dars tugadi!"}</h1>
@@ -871,6 +936,7 @@
     if (a === "home") { leaveLesson(); window.scrollTo(0, 0); return; }
     if (a === "practice") { if (!(history.state && history.state.lesson)) hpush({ tab, lesson: 1 }); return startPractice(); }
     if (a === "sound") { S.sound = !S.sound; save(); renderHome(); sfx("toggle"); return; }
+    if (a === "music") { S.music = !S.music; save(); audio(); renderHome(); return; }
     if (a === "reset") { modal = "reset"; renderHome(); return; }
     if (a === "reset-no") { modal = null; renderHome(); return; }
     if (a === "reset-yes") { modal = null; S = fresh(); save(); tab = "home"; renderOnboard(1); return; }
@@ -894,7 +960,7 @@
   load();
   try { history.replaceState({ tab: "home" }, ""); } catch (e) { /* iframe */ }
   if (!S.onboarded) renderOnboard(1); else renderHome();
-  window.DY_APP = { state: () => S, startLesson, cur: () => session && session.q[session.i], version: "1.1",
+  window.DY_APP = { state: () => S, startLesson, cur: () => session && session.q[session.i], version: "1.2", musicOn: () => !!mTimer && !mOff,
     replaceState(ns) { S = Object.assign(fresh(), ns); rollDay(); save(); if (!session) renderHome(); },
     refresh() {
       if (pendingStart && window.DY_CLOUD && window.DY_CLOUD.user()) { const id = pendingStart; pendingStart = null; closeSheet(); beginLesson(id); return; }
