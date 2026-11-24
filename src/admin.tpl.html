@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Yetakla Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@400;600;700;800&display=swap">
+<style>
+:root {
+  --bg: #f2f7f1; --surface: #fff; --surface-2: #e8f0e7; --ink: #16301e; --muted: #5b7062; --line: #d5e2d4;
+  --green: #1f9d55; --green-soft: #d9f3e2; --bar: #1f9d55; --bar-2: #8fd1a8; --heart: #e5484d;
+  --f-display: "Baloo 2", "Nunito", system-ui, sans-serif; --f-body: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1812; --surface: #16241b; --surface-2: #1d2f23; --ink: #e4f2e7; --muted: #9bb3a2; --line: #2a3f31;
+  --green: #33c46f; --green-soft: #173a25; --bar: #33c46f; --bar-2: #2c7a4b; --heart: #ff6b6f; } }
+:root[data-theme="dark"] { --bg: #0e1812; --surface: #16241b; --surface-2: #1d2f23; --ink: #e4f2e7; --muted: #9bb3a2; --line: #2a3f31;
+  --green: #33c46f; --green-soft: #173a25; --bar: #33c46f; --bar-2: #2c7a4b; --heart: #ff6b6f; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.45; }
+h1, h2 { font-family: var(--f-display); margin: 0; line-height: 1.15; }
+.top { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 2px solid var(--line); }
+.top .in { max-width: 1040px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+.brand { font-family: var(--f-display); font-weight: 800; font-size: 22px; color: var(--green); margin-right: auto; }
+.brand small { font-family: var(--f-body); font-size: 11px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-left: 6px; }
+main { max-width: 1040px; margin: 0 auto; padding: 16px 16px 48px; }
+.btn { font: inherit; font-weight: 800; border: 2px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 12px; padding: 8px 14px; cursor: pointer; }
+.btn.pri { background: var(--green); border-color: var(--green); color: #fff; }
+.btn:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+.muted { color: var(--muted); }
+.card { background: var(--surface); border: 2px solid var(--line); border-radius: 16px; padding: 16px; }
+.center { max-width: 420px; margin: 12vh auto 0; text-align: center; }
+.center p { margin: 8px 0 16px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 14px 0 18px; }
+.kpi b { display: block; font-family: var(--f-display); font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpi span { font-size: 13px; font-weight: 700; color: var(--muted); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+@media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+.card h2 { font-size: 19px; margin-bottom: 2px; }
+.card .sub { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: 180px; overflow: visible; }
+.chart .ax { font-size: 11px; fill: var(--muted); font-family: var(--f-body); }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+
+.chart rect.hit { fill: transparent; cursor: default; }
+.chart g:hover .b { opacity: .75; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--bg); font-size: 12px; font-weight: 700; padding: 5px 8px; border-radius: 8px; white-space: nowrap; transform: translate(-50%, -110%); display: none; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { font-size: 12px; color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.meter { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; min-width: 60px; }
+.meter i { display: block; height: 100%; background: var(--bar); border-radius: 5px; }
+details { border-bottom: 1px solid var(--line); }
+details summary { cursor: pointer; padding: 9px 2px; display: grid; grid-template-columns: minmax(0,1fr) 80px 80px minmax(60px, 30%); gap: 8px; align-items: center; list-style: none; }
+details summary::-webkit-details-marker { display: none; }
+details summary b { font-weight: 800; }
+details summary::before { content: "▸"; position: absolute; margin-left: -14px; color: var(--muted); }
+details[open] summary::before { content: "▾"; }
+.secs { padding-left: 14px; }
+.secs .hd { display: grid; grid-template-columns: minmax(0,1fr) 80px 80px minmax(60px, 30%); gap: 8px; font-size: 12px; color: var(--muted); font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 0 2px 6px; }
+.lessons { padding: 0 0 10px 0; }
+.lessons div { display: grid; grid-template-columns: minmax(0,1fr) 80px minmax(60px, 30%); gap: 8px; align-items: center; font-size: 13px; padding: 4px 2px; }
+.r { text-align: right; font-variant-numeric: tabular-nums; }
+.scroll { overflow-x: auto; }
+.card, .grid2 > * { min-width: 0; }
+@media (max-width: 520px) {
+  details summary, .secs .hd { grid-template-columns: minmax(0,1fr) 46px 46px 44px; gap: 6px; font-size: 14px; }
+  .secs .hd { font-size: 9.5px; letter-spacing: 0; }
+  .lessons div { grid-template-columns: minmax(0,1fr) 46px 44px; gap: 6px; }
+  .hide-s { display: none; }
+  #who { display: none; }
+  .top .btn { padding: 6px 10px; font-size: 14px; }
+  .brand small { display: none; }
+  th, td { padding: 7px 4px; }
+}
+.note { font-size: 13px; color: var(--muted); margin-top: 14px; }
+.err { color: var(--heart); font-weight: 700; }
+</style>
+</head>
+<body>
+<header class="top"><div class="in"><div class="brand">Yetakla<small>Admin</small></div><span id="who" class="muted" style="font-size:13px"></span><button class="btn" id="reload" hidden>Yangilash</button><button class="btn" id="out" hidden>Chiqish</button></div></header>
+<main id="app"><div class="center muted">Yuklanmoqda…</div></main>
+<script>/*CFG*/</script>
+<script>window.YETAKLA_OUTLINE = /*OUTLINE*/;</script>
+<script type="module">
+const V = "10.12.2", CDN = "https://www.gstatic.com/firebasejs/" + V + "/";
+const app = document.getElementById("app");
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = n => Number(n || 0).toLocaleString("ru-RU").replace(/,/g, " ");
+const dayStr = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+const toDate = v => !v ? null : v.toDate ? v.toDate() : new Date(v);
+const OUT = window.YETAKLA_OUTLINE || [];
+
+let A, F, auth, db;
+try {
+  const [a, au, fs] = await Promise.all([import(CDN + "firebase-app.js"), import(CDN + "firebase-auth.js"), import(CDN + "firebase-firestore.js")]);
+  const inst = a.initializeApp(window.YETAKLA_FIREBASE);
+  A = au; F = fs; auth = au.getAuth(inst); db = fs.getFirestore(inst);
+} catch (e) { app.innerHTML = `<div class="center card"><h1>Ulanib bo'lmadi</h1><p class="muted">Internetni tekshirib, sahifani yangilang.</p></div>`; throw e; }
+
+const $ = id => document.getElementById(id);
+$("out").onclick = () => A.signOut(auth);
+$("reload").onclick = () => load();
+
+function loginView(msg) {
+  $("who").textContent = ""; $("out").hidden = true; $("reload").hidden = true;
+  app.innerHTML = `<div class="center card"><h1>Admin panel</h1><p class="muted">Statistikani ko'rish uchun admin hisobi bilan kiring.</p>${msg ? `<p class="err">${esc(msg)}</p>` : ""}<button class="btn pri" id="in">Google bilan kirish</button></div>`;
+  $("in").onclick = async () => {
+    try { await A.signInWithPopup(auth, new A.GoogleAuthProvider()); }
+    catch (e) { if (!/popup-closed|cancelled-popup/.test(e.code || "")) loginView("Kirib bo'lmadi: " + (e.code || e.message)); }
+  };
+}
+
+A.onAuthStateChanged(auth, u => {
+  if (!u) return loginView();
+  $("who").textContent = u.displayName || ""; $("out").hidden = false; $("reload").hidden = false;
+  load();
+});
+
+async function load() {
+  app.innerHTML = `<div class="center muted">Ma'lumotlar yuklanmoqda…</div>`;
+  let snap;
+  try { snap = await F.getDocs(F.collection(db, "users")); }
+  catch (e) {
+    if (/permission/i.test(e.code || e.message || "")) {
+      app.innerHTML = `<div class="center card"><h1>Ruxsat yo'q</h1><p class="muted">Bu hisob admin emas. Boshqa hisob bilan kiring.</p><button class="btn" onclick="document.getElementById('out').click()">Chiqish</button></div>`;
+    } else app.innerHTML = `<div class="center card"><h1>Xatolik</h1><p class="err">${esc(e.code || e.message)}</p></div>`;
+    return;
+  }
+  const users = [];
+  snap.forEach(d => {
+    const v = d.data(); let s = {};
+    try { s = JSON.parse(v.s || "{}"); } catch (e) { /* */ }
+    const at = toDate(v.at);
+    const days = Array.isArray(v.days) ? v.days.slice() : [];
+    if (at && !days.length) days.push(dayStr(at));
+    const created = toDate(v.created) || (days.length ? new Date(days.slice().sort()[0] + "T12:00:00") : at);
+    users.push({ name: v.name || "", xp: s.xp || v.xp || 0, lessons: s.lessonsDone || 0, streak: s.streak || 0, best: s.bestStreak || 0, goal: s.goal || null, done: s.done || {}, at, days: new Set(days), created });
+  });
+  render(users);
+}
+
+function lastNDays(n) { const out = []; const d = new Date(); d.setHours(12, 0, 0, 0); for (let i = n - 1; i >= 0; i--) { const x = new Date(d); x.setDate(d.getDate() - i); out.push(dayStr(x)); } return out; }
+
+function barChart(id, labels, values, unit) {
+  const W = 600, H = 180, pl = 28, pb = 22, pt = 8, max = Math.max(1, ...values);
+  const step = Math.max(1, Math.ceil(max / 4)), top = step * Math.ceil(max / step);
+  const bw = (W - pl) / labels.length, y = v => pt + (H - pt - pb) * (1 - v / top);
+  let g = "";
+  for (let t = 0; t <= top; t += step) g += `<line class="grid" x1="${pl}" x2="${W}" y1="${y(t)}" y2="${y(t)}"/><text class="ax" x="${pl - 6}" y="${y(t) + 4}" text-anchor="end">${t}</text>`;
+  labels.forEach((l, i) => {
+    const v = values[i], x = pl + i * bw + 1, w = Math.max(2, bw - 2), h = (H - pt - pb) * v / top;
+    const lab = l.slice(8) + "." + l.slice(5, 7);
+    g += `<g data-tip="${lab}: ${v} ${unit}" data-x="${x + w / 2}" data-y="${y(v)}"><rect class="hit" x="${pl + i * bw}" y="${pt}" width="${bw}" height="${H - pt - pb}"/>${v ? `<path class="b" d="M${x} ${y(0)}V${y(0) - h + Math.min(4, h)}q0 -${Math.min(4, h)} ${Math.min(4, w / 2)} -${Math.min(4, h)}H${x + w - Math.min(4, w / 2)}q${Math.min(4, w / 2)} 0 ${Math.min(4, w / 2)} ${Math.min(4, h)}V${y(0)}Z" fill="var(--bar)"/>` : ""}</g>`;
+    if (i % 5 === 0 || i === labels.length - 1) g += `<text class="ax" x="${x + w / 2}" y="${H - 6}" text-anchor="middle">${lab}</text>`;
+  });
+  return `<div class="chart" id="${id}"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(unit)}">${g}</svg><div class="tip"></div></div>`;
+}
+
+function wireTips() {
+  document.querySelectorAll(".chart").forEach(c => {
+    const svg = c.querySelector("svg"), tip = c.querySelector(".tip");
+    svg.addEventListener("mousemove", e => {
+      const g = e.target.closest("g[data-tip]"); if (!g) { tip.style.display = "none"; return; }
+      const r = svg.getBoundingClientRect(), sx = r.width / 600, sy = r.height / 180;
+      tip.textContent = g.dataset.tip; tip.style.display = "block";
+      tip.style.left = (g.dataset.x * sx) + "px"; tip.style.top = (g.dataset.y * sy) + "px";
+    });
+    svg.addEventListener("mouseleave", () => tip.style.display = "none");
+  });
+}
+
+function render(U) {
+  const today = dayStr(new Date()), D30 = lastNDays(30), D7 = new Set(D30.slice(-7)), S30 = new Set(D30);
+  const n = U.length;
+  const act = set => U.filter(u => [...u.days].some(d => set.has(d))).length;
+  const todayN = U.filter(u => u.days.has(today)).length, w = act(D7), m = act(S30);
+  const totalLessons = U.reduce((a, u) => a + u.lessons, 0);
+  const avgXp = n ? Math.round(U.reduce((a, u) => a + u.xp, 0) / n) : 0;
+  const returning = U.filter(u => u.days.size >= 2).length;
+  const dau = D30.map(d => U.filter(u => u.days.has(d)).length);
+  const news = D30.map(d => U.filter(u => u.created && dayStr(u.created) === d).length);
+
+  const secRows = OUT.map(sec => {
+    const ids = sec.l.map(l => l[0]);
+    const started = U.filter(u => ids.some(i => u.done[i])).length;
+    const finished = ids.length ? U.filter(u => ids.every(i => u.done[i])).length : 0;
+    const pct = n ? Math.round(100 * finished / n) : 0;
+    const les = sec.l.map(([id, t]) => { const c = U.filter(u => u.done[id]).length; return `<div><span>${esc(t)}</span><span class="r">${c}</span><span class="meter"><i style="width:${n ? 100 * c / n : 0}%"></i></span></div>`; }).join("");
+    return `<details><summary><b>${esc(sec.t)}</b><span class="r">${started}</span><span class="r">${finished}</span><span class="meter" title="${pct}% tugatgan"><i style="width:${pct}%"></i></span></summary><div class="lessons">${les}</div></details>`;
+  }).join("");
+
+  const goals = [[10, "Yengil"], [20, "O'rtacha"], [50, "Jiddiy"], [100, "Kuchli"]].map(([g, t]) => [t + " (" + g + " XP)", U.filter(u => u.goal === g).length]);
+  goals.push(["Tanlanmagan", U.filter(u => ![10, 20, 50, 100].includes(u.goal)).length]);
+
+  const top = U.slice().sort((a, b) => b.xp - a.xp).slice(0, 20).map((u, i) => `<tr><td class="n">${i + 1}</td><td>${esc(u.name || "Nomsiz")}</td><td class="n">${fmt(u.xp)}</td><td class="n">${u.lessons}</td><td class="n hide-s">${u.streak}</td><td class="n">${u.at ? u.at.toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" }) : "—"}</td></tr>`).join("");
+
+  app.innerHTML = `
+  <h1 style="font-size:26px">Statistika</h1>
+  <div class="kpis">
+    <div class="card kpi"><b>${fmt(n)}</b><span>Jami foydalanuvchi</span></div>
+    <div class="card kpi"><b>${fmt(todayN)}</b><span>Bugun faol</span></div>
+    <div class="card kpi"><b>${fmt(w)}</b><span>7 kunda faol</span></div>
+    <div class="card kpi"><b>${fmt(m)}</b><span>30 kunda faol</span></div>
+    <div class="card kpi"><b>${fmt(totalLessons)}</b><span>Tugatilgan darslar</span></div>
+    <div class="card kpi"><b>${fmt(avgXp)}</b><span>O'rtacha XP</span></div>
+    <div class="card kpi"><b>${n ? Math.round(100 * returning / n) : 0}%</b><span>Qaytib kelganlar (2+ kun)</span></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h2>Kunlik faol foydalanuvchilar</h2><p class="sub">Oxirgi 30 kun</p>${barChart("c1", D30, dau, "kishi")}</div>
+    <div class="card"><h2>Yangi foydalanuvchilar</h2><p class="sub">Oxirgi 30 kun, birinchi kirgan kuni bo'yicha</p>${barChart("c2", D30, news, "yangi")}</div>
+  </div>
+  <div class="card" style="margin-bottom:12px"><h2>Bo'limlar bo'yicha</h2><p class="sub">Bosib, har bir dars bo'yicha ko'ring. Chiziq: bo'limni tugatganlar ulushi.</p>
+    <div class="secs"><div class="hd"><span>Bo'lim</span><span class="r">Boshladi</span><span class="r">Tugatdi</span><span></span></div>${secRows}</div></div>
+  <div class="grid2">
+    <div class="card scroll"><h2>Eng faol 20 foydalanuvchi</h2><p class="sub">XP bo'yicha</p><table><thead><tr><th class="n">#</th><th>Ism</th><th class="n">XP</th><th class="n">Dars</th><th class="n hide-s">Olov</th><th class="n">Oxirgi</th></tr></thead><tbody>${top || `<tr><td colspan="6" class="muted">Hali hech kim yo'q</td></tr>`}</tbody></table></div>
+    <div class="card"><h2>Kunlik maqsad tanlovi</h2><p class="sub">Foydalanuvchilar qaysi maqsadni tanlagan</p><table><tbody>${goals.map(([t, c]) => `<tr><td>${t}</td><td class="n">${c}</td><td style="width:40%"><span class="meter" style="display:block"><i style="width:${n ? 100 * c / n : 0}%"></i></span></td></tr>`).join("")}</tbody></table></div>
+  </div>
+  <p class="note">Faqat Google bilan kirgan foydalanuvchilar hisoblanadi. Kirmasdan o'qiyotganlar progressi o'z brauzerida qoladi va bu yerga tushmaydi. Kunlik faollik 24-noyabrdan boshlab yig'ila boshlagan.</p>`;
+  wireTips();
+}
+</script>
+</body>
+</html>
