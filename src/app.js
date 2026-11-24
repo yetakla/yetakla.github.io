@@ -687,11 +687,15 @@ else if(m.op==="run"){await py.loadPackagesFromImports(m.src);const f=py.globals
   function topbar() {
     return `<header class="topbar"><div class="wrap">
       <div class="brand">Yetakla</div>
+      <div class="tgrp stats3">
       <span class="stat fire ${S.streak ? "" : "off"}" title="Ketma-ket kunlar">🔥 ${S.streak}</span>
-      <span class="stat xp" title="Jami XP">⚡ ${S.xp}</span>
+      <span class="stat xp" title="Jami XP: ${S.xp}">⚡ ${S.xp >= 10000 ? (Math.floor(S.xp / 100) / 10).toString().replace(".", ",") + "K" : S.xp}</span>
       <span class="stat hp" title="Jonlar">❤️ ${S.hearts}</span>
+      </div>
+      <div class="tgrp ctl">
       <button class="mus thm" data-act="theme" aria-label="${isDark() ? "Yorug' rejimga o'tish" : "Qorong'i rejimga o'tish"}" title="${isDark() ? "Yorug' rejim" : "Qorong'i rejim"}">${isDark() ? I.sun : I.moon}</button>
       <button class="mus ${S.music ? "on" : ""}" data-act="music" aria-label="Fon musiqasi: ${S.music ? "yoqiq" : "o'chiq"}" title="Fon musiqasi">${I.music}</button>
+      </div>
       ${ring()}
     </div></header>`;
   }
