@@ -620,3 +620,5 @@ button.stat.fire:active { transform: scale(.94); }
 .cd.r::after { left: 50%; right: 0; }
 .cal-f { margin: 8px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
 .cal-f b { color: var(--flame); }
+button.pst { text-align: left; width: 100%; cursor: pointer; }
+button.pst:active, .today button.card:active { transform: scale(.97); }

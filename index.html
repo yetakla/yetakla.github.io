@@ -631,6 +631,8 @@ button.stat.fire:active { transform: scale(.94); }
 .cd.r::after { left: 50%; right: 0; }
 .cal-f { margin: 8px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
 .cal-f b { color: var(--flame); }
+button.pst { text-align: left; width: 100%; cursor: pointer; }
+button.pst:active, .today button.card:active { transform: scale(.97); }
 
 </style>
 <link rel="manifest" href="manifest.webmanifest">
@@ -3228,14 +3230,14 @@ else if(m.op==="run"){await py.loadPackagesFromImports(m.src);const f=py.globals
     const ti = TIERS.reduce((a, t, i) => S.xp >= t[1] ? i : a, 0), cur = TIERS[ti];
     const seg = (v, n) => `<button class="${S.goal === v ? "on" : ""}" data-goal="${v}"><b>${n}</b><small>${v} XP</small></button>`;
     const row = (title, sub, ctl) => `<div class="srow"><span class="st"><b>${title}</b>${sub ? `<small>${sub}</small>` : ""}</span>${ctl}</div>`;
-    const tile = (ic, v, l) => `<div class="pst"><span class="pi">${ic}</span><b>${v}</b><small>${l}</small></div>`;
+    const tile = (ic, v, l, act) => act ? `<button class="pst" data-act="${act}"><span class="pi">${ic}</span><b>${v}</b><small>${l}${act && ic === "🔥" ? " ›" : ""}</small></button>` : `<div class="pst"><span class="pi">${ic}</span><b>${v}</b><small>${l}</small></div>`;
     return `<div class="page wrap prof">
       <div class="phero">
         <button class="pav" data-act="photo-edit" style="--t:${cur[2]}" aria-label="Profil rasmini o'zgartirish">${photoSrc() ? `<img src="${esc(photoSrc())}" alt="" referrerpolicy="no-referrer">` : emoOf(S.photo) ? `<span class="emo" style="background:${emoOf(S.photo)[1]}">${emoOf(S.photo)[0]}</span>` : nm ? esc(nm[0].toUpperCase()) : mascot("happy")}<span class="cam">📷</span></button>
         <button class="pname" data-act="name-edit"><span class="nm ${nm ? "" : "empty"}">${nm ? esc(nm) : "Ismingizni kiriting"}</span><span class="pen">${I.pen}</span></button>
         <div class="pmeta"><span class="tier" style="--t:${cur[2]}">${cur[0]} liga</span><span class="acct ${u ? "on" : ""}">${u ? "Hisob ulangan ✓" : "Mehmon rejimi"}</span></div>
       </div>
-      <div class="pstats">${tile("⚡", S.xp, "Jami XP")}${tile("🔥", S.streak, "Joriy olov")}${tile("📚", S.lessonsDone, "Darslar")}${tile("🏆", S.bestStreak, "Rekord olov")}</div>
+      <div class="pstats">${tile("⚡", S.xp, "Jami XP")}${tile("🔥", S.streak, "Joriy olov", "streak")}${tile("📚", S.lessonsDone, "Darslar")}${tile("🏆", S.bestStreak, "Rekord olov", "streak")}</div>
       ${C ? C.card() : ""}
       ${friendsCard()}
       ${portfolioCard()}
@@ -3289,7 +3291,7 @@ else if(m.op==="run"){await py.loadPackagesFromImports(m.src);const f=py.globals
       ${poolN ? `<button class="card course mist" data-act="mistakes"><span class="ic">${I.repeat}</span><span class="txt"><b>Xatolar ustida ishlash</b><small>${poolN} ta savolni qayta mashq qiling · +1 ❤️ har to'g'ri javobga</small></span><span class="chev">›</span></button>` : ""}
       <div class="today">
         <div class="card"><b>${S.todayXp}<small>/${g}</small></b><span>Bugungi XP</span><i class="bar"><i style="width:${Math.min(100, 100 * S.todayXp / g)}%"></i></i></div>
-        <div class="card"><b>${S.streak} 🔥</b><span>Olov</span></div>
+        <button class="card" data-act="streak"><b>${S.streak} 🔥</b><span>Olov ›</span></button>
         <button class="card" data-tab="rank"><b>${S.weekXp || 0}</b><span>Haftalik XP ›</span></button>
       </div>
       ${questsHTML()}
