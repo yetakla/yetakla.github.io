@@ -32,6 +32,7 @@
     else if (qa && qb && qa.day === qb.day) { r.quests = Object.assign({}, qa, { p: Object.assign({}, qb.p, qa.p), got: Object.assign({}, qb.got, qa.got) }); for (const k in qb.p || {}) r.quests.p[k] = Math.max(qa.p[k] || 0, qb.p[k]); }
     r.port = Object.assign({}, b.port || {}, a.port || {});
     r.name = a.name || b.name || "";
+    if ((b.photoAt || 0) > (a.photoAt || 0)) { r.photo = b.photo || ""; r.photoAt = b.photoAt; }
     r.refBy = a.refBy || b.refBy || ""; r.refFrom = a.refFrom || b.refFrom || "";
     r.refClaimed = Array.from(new Set([].concat(a.refClaimed || [], b.refClaimed || [])));
     return r;

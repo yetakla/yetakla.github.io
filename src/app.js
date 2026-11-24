@@ -532,6 +532,39 @@
   }
   const myName = () => { const C = window.DY_CLOUD, u = C && C.user(); return String(S.name || (u && u.displayName) || "").trim(); };
   let allBadges = false;
+  // Profil rasmi: qurilmada kichraytirilgan JPEG (data:) yoki Google rasmi (https)
+  const photoSrc = () => { const p = String(S.photo || ""); return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p) || /^https:\/\/lh\d\.googleusercontent\.com\//.test(p) ? p : ""; };
+  function editPhoto() {
+    const C = window.DY_CLOUD, u = C && C.user(), g = u && u.photoURL && /^https:\/\/lh\d\.googleusercontent\.com\//.test(u.photoURL) ? u.photoURL : "";
+    const m = document.createElement("div"); m.className = "sheet-modal";
+    m.innerHTML = `<div class="card" role="dialog" aria-label="Profil rasmi"><h3>Profil rasmi</h3><p class="muted" style="font-size:15px">Rasm faqat sizning profilingizda ko'rinadi. Kvadrat shaklda kesib, kichraytirib saqlanadi.</p>
+      <label class="btn"><input type="file" id="phin" accept="image/*" hidden>Rasm tanlash</label>
+      ${g ? `<button class="btn ghost" data-act="photo-google">Google rasmini qo'yish</button>` : ""}
+      ${photoSrc() ? `<button class="btn ghost red-t" data-act="photo-del">Rasmni olib tashlash</button>` : ""}
+      <small id="pherr" class="nm-err"></small>
+      <button class="btn ghost" data-act="close-simple">Bekor qilish</button></div>`;
+    m.addEventListener("click", e => { if (e.target === m || e.target.closest('[data-act="close-simple"]')) m.remove(); });
+    document.body.appendChild(m);
+    m.querySelector("#phin").addEventListener("change", e => { const f = e.target.files && e.target.files[0]; if (f) loadPhoto(f); });
+  }
+  function loadPhoto(f) {
+    const err = document.getElementById("pherr");
+    if (!/^image\//.test(f.type)) { if (err) err.textContent = "Bu rasm fayli emas."; return; }
+    if (f.size > 15e6) { if (err) err.textContent = "Rasm juda katta (15 MB dan oshmasin)."; return; }
+    if (err) { err.style.color = "var(--muted)"; err.textContent = "Tayyorlanmoqda…"; }
+    const url = URL.createObjectURL(f), im = new Image();
+    im.onload = () => {
+      const N = 192, side = Math.min(im.naturalWidth, im.naturalHeight), cv = document.createElement("canvas"); cv.width = cv.height = N;
+      const x = cv.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, N, N);
+      x.drawImage(im, (im.naturalWidth - side) / 2, (im.naturalHeight - side) / 2, side, side, 0, 0, N, N);
+      URL.revokeObjectURL(url);
+      let q = 0.85, d = cv.toDataURL("image/jpeg", q); while (d.length > 40000 && q > 0.4) { q -= 0.15; d = cv.toDataURL("image/jpeg", q); }
+      setPhoto(d);
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); if (err) { err.style.color = ""; err.textContent = "Rasmni ochib bo'lmadi. Boshqa rasm tanlang (JPG yoki PNG)."; } };
+    im.src = url;
+  }
+  function setPhoto(v) { S.photo = v; S.photoAt = Date.now(); save(); document.querySelectorAll(".sheet-modal").forEach(x => x.remove()); renderHome(); toastNow(v ? "Rasm saqlandi" : "Rasm olib tashlandi", "📷"); }
   function profileHTML() {
     const C = window.DY_CLOUD, u = C && C.user(), nm = myName();
     const ti = TIERS.reduce((a, t, i) => S.xp >= t[1] ? i : a, 0), cur = TIERS[ti];
@@ -540,7 +573,7 @@
     const tile = (ic, v, l) => `<div class="pst"><span class="pi">${ic}</span><b>${v}</b><small>${l}</small></div>`;
     return `<div class="page wrap prof">
       <div class="phero">
-        <button class="pav" data-act="name-edit" style="--t:${cur[2]}" aria-label="Ismni o'zgartirish">${nm ? esc(nm[0].toUpperCase()) : mascot("happy")}</button>
+        <button class="pav" data-act="photo-edit" style="--t:${cur[2]}" aria-label="Profil rasmini o'zgartirish">${photoSrc() ? `<img src="${esc(photoSrc())}" alt="" referrerpolicy="no-referrer">` : nm ? esc(nm[0].toUpperCase()) : mascot("happy")}<span class="cam">📷</span></button>
         <button class="pname" data-act="name-edit"><span class="nm ${nm ? "" : "empty"}">${nm ? esc(nm) : "Ismingizni kiriting"}</span><span class="pen">${I.pen}</span></button>
         <div class="pmeta"><span class="tier" style="--t:${cur[2]}">${cur[0]} liga</span><span class="acct ${u ? "on" : ""}">${u ? "Hisob ulangan ✓" : "Mehmon rejimi"}</span></div>
       </div>
@@ -1251,6 +1284,9 @@ ${P.out.map((o, i) => `<h2>${i + 1}. ${esc(o.task)}</h2><pre>${esc(o.sql)}</pre>
     if (a === "invite") return shareInvite();
     if (a === "name-edit") return editName();
     if (a === "name-save") return saveName();
+    if (a === "photo-edit") return editPhoto();
+    if (a === "photo-del") return setPhoto("");
+    if (a === "photo-google") { const u = window.DY_CLOUD && window.DY_CLOUD.user(); if (u && u.photoURL) setPhoto(u.photoURL); return; }
     if (a === "badges-all") { allBadges = !allBadges; renderHome(); return; }
     if (a === "rv-all" || a === "rv-fr") { rankView = a === "rv-fr" ? "fr" : "all"; renderHome(); return; }
     if (a === "sound") { S.sound = !S.sound; save(); renderHome(); sfx("toggle"); return; }

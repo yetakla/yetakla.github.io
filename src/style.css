@@ -559,3 +559,10 @@ i.bar > i { display: block; height: 100%; border-radius: 4px; background: var(--
 .nm-in { width: 100%; font: inherit; font-size: 18px; font-weight: 700; color: var(--ink); background: var(--surface-2); border: 2px solid var(--line); border-radius: 14px; padding: 14px 16px; }
 .nm-in:focus { border-color: var(--sky); outline: none; }
 .nm-err { color: var(--heart); font-weight: 700; min-height: 1em; margin-top: -6px; }
+.pav { position: relative; overflow: visible; }
+.pav img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+.pav svg.mascot { border-radius: 0; }
+.pav .cam { position: absolute; right: -4px; bottom: -2px; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); border: 2px solid var(--line); font-size: 16px; box-shadow: var(--shadow); }
+.sheet-modal label.btn { cursor: pointer; }
+.btn.ghost.red-t { color: var(--heart); }
+.nm-err:empty { display: none; }
