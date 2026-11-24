@@ -34,6 +34,8 @@
     r.name = a.name || b.name || "";
     if ((b.photoAt || 0) > (a.photoAt || 0)) { r.photo = b.photo || ""; r.photoSm = b.photoSm || ""; r.photoAt = b.photoAt; }
     r.refBy = a.refBy || b.refBy || ""; r.refFrom = a.refFrom || b.refFrom || "";
+    r.days = Object.assign({}, b.days || {}, a.days || {});
+    for (const k in (b.days || {})) if (b.days[k] === 1) r.days[k] = 1;
     r.refClaimed = Array.from(new Set([].concat(a.refClaimed || [], b.refClaimed || [])));
     return r;
   }

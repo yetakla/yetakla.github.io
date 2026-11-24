@@ -590,3 +590,33 @@ i.bar > i { display: block; height: 100%; border-radius: 4px; background: var(--
 @media (max-width: 430px) { .topbar .wrap { gap: 4px; } .tgrp .stat { padding: 5px 3px; font-size: 13.5px; gap: 2px; } .tgrp .stat:first-child { padding-left: 6px; } .tgrp .stat:last-child { padding-right: 6px; } .tgrp .mus { width: 29px; height: 30px; } .tgrp .mus svg { width: 19px; height: 19px; } .brand { font-size: 18px; } }
 @media (max-width: 375px) { .topbar .brand { font-size: 16px; } .topbar .wrap { gap: 3px; } }
 @media (max-width: 350px) { .topbar .brand { display: none; } .topbar .wrap { justify-content: space-between; } }
+/* Olovli kunlar kalendari */
+button.stat { cursor: pointer; }
+button.stat.fire:active { transform: scale(.94); }
+.streakcal { display: flex; flex-direction: column; gap: 14px; }
+.sc-top { display: flex; align-items: center; gap: 12px; }
+.sc-fire { font-size: 44px; line-height: 1; filter: drop-shadow(0 4px 10px color-mix(in srgb, var(--flame) 45%, transparent)); }
+.sc-fire.off { filter: grayscale(1); opacity: .6; }
+.sc-top b { display: block; font-family: var(--f-display); font-size: 28px; line-height: 1.1; color: var(--flame); }
+.sc-top small { color: var(--muted); font-weight: 700; font-size: 14px; }
+.sc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.sc-stats span { background: var(--surface-2); border-radius: 12px; padding: 8px 6px; text-align: center; }
+.sc-stats b { display: block; font-family: var(--f-display); font-size: 20px; font-variant-numeric: tabular-nums; }
+.sc-stats small { color: var(--muted); font-size: 12px; font-weight: 800; }
+.cal-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.cal-h b { font-family: var(--f-display); font-size: 18px; }
+.cal-nav { width: 36px; height: 36px; border-radius: 10px; font-size: 24px; line-height: 1; font-weight: 800; color: var(--ink); background: var(--surface-2); }
+.cal-nav:disabled { opacity: .3; cursor: default; }
+.cal-g { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 4px; }
+.cal-g .wd { text-align: center; font-size: 12px; font-weight: 800; color: var(--muted); padding-bottom: 4px; }
+.cd { position: relative; height: 38px; display: grid; place-items: center; }
+.cd b { position: relative; z-index: 1; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); }
+.cd.fu b { color: var(--lock-d); }
+.cd.td b { box-shadow: inset 0 0 0 2px var(--flame); }
+.cd.on b { background: var(--flame); color: #fff; box-shadow: none; }
+.cd.fz b { background: var(--sky-soft); color: var(--sky); font-size: 16px; }
+.cd.l::before, .cd.r::after { content: ""; position: absolute; top: 4px; bottom: 4px; background: color-mix(in srgb, var(--flame) 28%, transparent); }
+.cd.l::before { left: 0; right: 50%; }
+.cd.r::after { left: 50%; right: 0; }
+.cal-f { margin: 8px 0 0; font-size: 13px; color: var(--muted); text-align: center; }
+.cal-f b { color: var(--flame); }

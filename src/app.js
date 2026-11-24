@@ -105,7 +105,7 @@
   }
 
   /* ---------- state ---------- */
-  const fresh = () => ({ v: 1, xp: 0, todayXp: 0, today: dayStr(), goal: null, streak: 0, bestStreak: 0, lastDay: null, hearts: 5, done: {}, lessonsDone: 0, pool: {}, badges: {}, sound: true, formulasOk: 0, reviewsOk: 0, onboarded: false, week: "", weekXp: 0, music: true, coins: 0, freezes: 0, quests: null, port: {}, refFrom: "", refBy: "", refClaimed: [], frozeNote: 0 });
+  const fresh = () => ({ v: 1, xp: 0, todayXp: 0, today: dayStr(), goal: null, streak: 0, bestStreak: 0, lastDay: null, hearts: 5, done: {}, lessonsDone: 0, pool: {}, badges: {}, sound: true, formulasOk: 0, reviewsOk: 0, onboarded: false, week: "", weekXp: 0, music: true, coins: 0, freezes: 0, quests: null, port: {}, refFrom: "", refBy: "", refClaimed: [], frozeNote: 0, days: {} });
   let S;
   function load() {
     try { const raw = localStorage.getItem(KEY); S = raw ? Object.assign(fresh(), JSON.parse(raw)) : fresh(); } catch (e) { S = fresh(); }
@@ -121,9 +121,21 @@
     // Do'st taklifi: ?ref=<uid>
     const rf = /[?&]ref=([A-Za-z0-9]{10,40})/.exec(location.search || "");
     if (rf) { if (!S.refBy && !S.refFrom) { S.refFrom = rf[1]; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* */ } } try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) { /* */ } }
+    backfillDays();
     rollDay();
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* xotira yo'q — sessiyada saqlanadi */ } if (window.DY_CLOUD) try { window.DY_CLOUD.onSave(S); } catch (e) { /* bulut ixtiyoriy */ } }
+  function shiftDay(str, n) { const [y, m, d] = str.split("-").map(Number); return dayStr(new Date(y, m - 1, d + n)); }
+  function backfillDays() {
+    if (S.days && typeof S.days === "object" && Object.keys(S.days).length) return;
+    S.days = {};
+    if (S.lastDay) for (let i = 0; i < Math.max(1, Math.min(S.streak || 0, 400)); i++) S.days[shiftDay(S.lastDay, -i)] = 1;
+  }
+  function markDay(t, v) {
+    if (!S.days || typeof S.days !== "object") S.days = {};
+    if (S.days[t] === 1) return; S.days[t] = v;
+    const ks = Object.keys(S.days); if (ks.length > 420) ks.sort().slice(0, ks.length - 400).forEach(k => delete S.days[k]);
+  }
   function rollDay() {
     const t = dayStr();
     if (S.today !== t) { S.today = t; S.todayXp = 0; S.hearts = 5; }
@@ -131,7 +143,7 @@
     if (S.lastDay && S.lastDay !== t && S.lastDay !== yesterday()) {
       // Olov himoyasi: o'tkazib yuborilgan har kun uchun bittadan sarflanadi
       const gap = daysBetween(S.lastDay, t) - 1;
-      if (S.streak > 0 && gap > 0 && gap <= (S.freezes || 0)) { S.freezes -= gap; S.lastDay = yesterday(); S.frozeNote = gap; }
+      if (S.streak > 0 && gap > 0 && gap <= (S.freezes || 0)) { S.freezes -= gap; for (let i = 1; i <= gap; i++) markDay(shiftDay(S.lastDay, i), 2); S.lastDay = yesterday(); S.frozeNote = gap; }
       else S.streak = 0;
     }
   }
@@ -140,6 +152,7 @@
     if (n <= 0) return;
     const t = dayStr();
     if (S.lastDay !== t) { S.streak = S.lastDay === yesterday() ? S.streak + 1 : 1; S.lastDay = t; S.bestStreak = Math.max(S.bestStreak, S.streak); }
+    markDay(t, 1);
     if (S.week !== weekKey()) { S.week = weekKey(); S.weekXp = 0; }
     const before = S.todayXp; S.xp += n; S.todayXp += n; S.weekXp = (S.weekXp || 0) + n;
     if (S.goal && before < S.goal && S.todayXp >= S.goal) award("goal");
@@ -688,7 +701,7 @@ else if(m.op==="run"){await py.loadPackagesFromImports(m.src);const f=py.globals
     return `<header class="topbar"><div class="wrap">
       <div class="brand">Yetakla</div>
       <div class="tgrp stats3">
-      <span class="stat fire ${S.streak ? "" : "off"}" title="Ketma-ket kunlar">🔥 ${S.streak}</span>
+      <button class="stat fire ${S.streak ? "" : "off"}" data-act="streak" title="Ketma-ket kunlar" aria-label="Ketma-ket kunlar: ${S.streak}. Kalendarni ochish">🔥 ${S.streak}</button>
       <span class="stat xp" title="Jami XP: ${S.xp}">⚡ ${S.xp >= 10000 ? (Math.floor(S.xp / 100) / 10).toString().replace(".", ",") + "K" : S.xp}</span>
       <span class="stat hp" title="Jonlar">❤️ ${S.hearts}</span>
       </div>
@@ -1306,6 +1319,42 @@ else if(m.op==="run"){await py.loadPackagesFromImports(m.src);const f=py.globals
       <div class="foot-center"><button class="btn sky" data-act="practice">Takrorlash bilan jon tiklash</button><button class="btn ghost" data-act="home">Xaritaga qaytish</button></div></div></div>`;
     session = null;
   }
+  const MONTHS = ["Yanvar", "Fevral", "Mart", "Aprel", "May", "Iyun", "Iyul", "Avgust", "Sentabr", "Oktabr", "Noyabr", "Dekabr"];
+  let calOff = 0;
+  function calHTML() {
+    const now = new Date(), base = new Date(now.getFullYear(), now.getMonth() + calOff, 1);
+    const y = base.getFullYear(), mo = base.getMonth(), nd = new Date(y, mo + 1, 0).getDate(), lead = (base.getDay() + 6) % 7, today = dayStr();
+    const D = S.days || {}, ds = d => dayStr(new Date(y, mo, d));
+    const first = Object.keys(D).sort()[0] || today, canPrev = first.slice(0, 7) < ds(1).slice(0, 7);
+    let cells = "", cnt = 0;
+    for (let i = 0; i < lead; i++) cells += '<span class="cd e"></span>';
+    for (let d = 1; d <= nd; d++) {
+      const k = ds(d), v = D[k], col = (lead + d - 1) % 7;
+      const on = v === 1 || v === 2, pv = d > 1 && col > 0 && (D[ds(d - 1)] === 1 || D[ds(d - 1)] === 2), nx = d < nd && col < 6 && (D[ds(d + 1)] === 1 || D[ds(d + 1)] === 2);
+      if (v === 1) cnt++;
+      cells += `<span class="cd${on ? " on" : ""}${v === 2 ? " fz" : ""}${on && pv ? " l" : ""}${on && nx ? " r" : ""}${k === today ? " td" : ""}${k > today ? " fu" : ""}"><b>${v === 2 ? "❄" : d}</b></span>`;
+    }
+    for (let i = lead + nd; i < 42; i++) cells += '<span class="cd e"></span>';
+    return `<div class="cal-h"><button class="cal-nav" data-act="cal-prev" aria-label="Oldingi oy" ${canPrev ? "" : "disabled"}>‹</button><b>${MONTHS[mo]} ${y}</b><button class="cal-nav" data-act="cal-next" aria-label="Keyingi oy" ${calOff < 0 ? "" : "disabled"}>›</button></div>
+      <div class="cal-g">${["Du", "Se", "Ch", "Pa", "Ju", "Sh", "Ya"].map(w => `<span class="wd">${w}</span>`).join("")}${cells}</div>
+      <p class="cal-f">Bu oyda <b>${cnt}</b> kun dars qilindi${Object.values(D).includes(2) ? " · ❄ — olov himoyasi saqlab qolgan kun" : ""}</p>`;
+  }
+  function showStreak() {
+    calOff = 0;
+    const m = document.createElement("div"); m.className = "sheet-modal";
+    const done = S.lastDay === dayStr();
+    m.innerHTML = `<div class="card streakcal" role="dialog" aria-label="Olovli kunlar kalendari">
+      <div class="sc-top"><span class="sc-fire ${S.streak ? "" : "off"}">🔥</span><div><b>${S.streak} kun</b><small>${S.streak ? (done ? "Bugungi olov yoqildi!" : "Bugun dars qilib, olovni davom ettiring") : "Bugun dars qilib, olovni yoqing"}</small></div></div>
+      <div class="sc-stats"><span><b>${S.bestStreak || 0}</b><small>Eng uzun</small></span><span><b>${Object.values(S.days || {}).filter(v => v === 1).length}</b><small>Jami kun</small></span><span><b>❄️ ${S.freezes || 0}</b><small>Himoya</small></span></div>
+      <div id="calbox">${calHTML()}</div>
+      <button class="btn" data-act="close-simple">Yopish</button></div>`;
+    m.addEventListener("click", e => {
+      if (e.target === m || e.target.closest('[data-act="close-simple"]')) return m.remove();
+      const nb = e.target.closest("[data-act=cal-prev],[data-act=cal-next]"); if (!nb || nb.disabled) return;
+      calOff += nb.dataset.act === "cal-prev" ? -1 : 1; m.querySelector("#calbox").innerHTML = calHTML();
+    });
+    document.body.appendChild(m);
+  }
   function showSimple() {
     const st = session.q[session.i];
     const txt = st.simple || (st.review && EX[st.id] ? EX[st.id].l.simple : session.l.simple);
@@ -1570,6 +1619,7 @@ ${P.out.map((o, i) => `<h2>${i + 1}. ${esc(o.task)}</h2><pre>${esc(o.sql)}</pre>
     if (a === "badges-all") { allBadges = !allBadges; renderHome(); return; }
     if (a === "rv-all" || a === "rv-fr") { rankView = a === "rv-fr" ? "fr" : "all"; renderHome(); return; }
     if (a === "sound") { S.sound = !S.sound; save(); renderHome(); sfx("toggle"); return; }
+    if (a === "streak") { showStreak(); return; }
     if (a === "theme") { setTheme(isDark() ? "light" : "dark"); renderHome(); return; }
     if (a === "music") { S.music = !S.music; save(); audio(); if (!S.music) musicStopNow(); renderHome(); return; }
     if (a === "reset") { modal = "reset"; renderHome(); return; }
@@ -1598,7 +1648,7 @@ ${P.out.map((o, i) => `<h2>${i + 1}. ${esc(o.task)}</h2><pre>${esc(o.sql)}</pre>
   if (!S.onboarded) renderOnboard(1); else renderHome();
   window.DY_APP = { state: () => S, startLesson, cur: () => session && session.q[session.i], version: "1.3", musicOn: () => !!mTimer && !mOff,
     gift, quests: () => quests(),
-    replaceState(ns) { S = Object.assign(fresh(), ns); rollDay(); save(); if (!session) renderHome(); },
+    replaceState(ns) { S = Object.assign(fresh(), ns); backfillDays(); rollDay(); save(); if (!session) renderHome(); },
     refresh() {
       if (pendingStart && window.DY_CLOUD && window.DY_CLOUD.user()) { const id = pendingStart; pendingStart = null; closeSheet(); beginLesson(id); return; }
       if (!session && S.onboarded) renderHome();
