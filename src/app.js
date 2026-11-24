@@ -4,6 +4,7 @@
   const COURSE = window.DY_COURSE, DATA = window.DY_DATA, F = window.DY_FORMULA;
   const $app = document.getElementById("app");
   const KEY = "datayol_v1";
+  const MASCOT = "Bilimdon"; // maskot ismi — bitta joyda
 
   /* ---------- helpers ---------- */
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -50,7 +51,7 @@
     join: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg>'
   };
 
-  /* ---------- Hudhud (maskot): popishak — yo'lni yetaklovchi dono qush ---------- */
+  /* ---------- Maskot (MASCOT): hudhud qushi — yo'lni yetaklovchi dono qush ---------- */
   function mascot(mood = "ok", cls = "") {
     const BODY = "#E8893C", BODY_D = "#C96A22", BELLY = "#FBD3A2", INK = "#2A211C", TIP = "#1F1A17";
     // toj patlari: har bir kayfiyatda boshqacha yoyiladi
@@ -75,7 +76,7 @@
     const beak = mood === "happy"
       ? `<path d="M45.5 65.5Q50 63 54.5 65.5Q53.5 76 49 84Q48.5 74 45.5 65.5Z" fill="${INK}"/><path d="M47 68Q50 71 53 68" stroke="${BELLY}" stroke-width="1.4" fill="none" stroke-linecap="round"/>`
       : `<path d="M45.5 65.5Q50 63 54.5 65.5Q53.5 76 48.5 85Q48 74 45.5 65.5Z" fill="${INK}"/>`;
-    return `<svg class="mascot ${cls}" viewBox="0 0 100 112" role="img" aria-label="Hudhud">
+    return `<svg class="mascot ${cls}" viewBox="0 0 100 112" role="img" aria-label="${MASCOT}">
       ${crest}
       ${wing("l", wr[0])}${wing("r", wr[1])}
       <ellipse cx="50" cy="72" rx="27" ry="30" fill="${BODY}"/>
@@ -521,10 +522,19 @@
   function leaveLesson() { session = null; if (history.state && history.state.lesson) history.back(); else renderHome(); }
   function renderOnboard(step) {
     const sel = S.goal;
+    if (step === "dir") {
+      $app.innerHTML = `<div class="layer"><div class="center">${mascot("think", "float")}
+        <h1 class="g">Nimani o'rganmoqchisiz?</h1><p>Yo'nalishni tanlang. Keyinroq boshqasini ham qo'shishingiz mumkin.</p>
+        <div class="dirs">
+          <button class="card course" data-act="onb-dir"><span class="ic">${I.chart}</span><span class="txt"><b>Data analitika</b><small>Excel, SQL, Power BI, Python</small></span><span class="chev">›</span></button>
+          <div class="card course soon"><span class="ic">${I.lock}</span><span class="txt"><b>Yangi yo'nalishlar</b><small>Tez kunda qo'shiladi</small></span></div>
+        </div></div></div>`;
+      return;
+    }
     $app.innerHTML = `<div class="layer"><div class="center">${mascot("happy", "float")}
       ${step === 2 ? `<h1 class="g">Kunlik maqsad</h1><p>Har kuni qancha o'qiysiz? Keyin Profil bo'limida o'zgartirish mumkin.</p>
         <div class="goals">${[[20, "Yengil", "≈ 10 daqiqa"], [50, "Jiddiy", "≈ 20 daqiqa"], [100, "Kuchli", "≈ 40 daqiqa"]].map(g => `<button class="opt ${sel === g[0] ? "sel" : ""}" data-ogoal="${g[0]}"><span>${g[1]}</span><small>${g[0]} XP · ${g[2]}</small></button>`).join("")}</div>`
-      : `<h1 class="g">Salom! Men Hudhudman.</h1><p>Men seni yo'l bo'ylab yetaklayman. Yetakla'da data analitikani noldan, o'zbek tilida o'rganamiz: Excel, SQL, Power BI, Python. Har kuni oz-ozdan.</p>`}
+      : `<h1 class="g">Salom! Men ${MASCOT}man.</h1><p>Yetakla'da yangi kasb va ko'nikmalarni o'zbek tilida, o'yin orqali o'rganasiz. Kuniga 5–10 daqiqa yetarli, yo'lni esa men ko'rsatib boraman.</p>`}
       <div class="foot-center">${step === 2 ? `<button class="btn" data-act="onb-done" ${sel ? "" : "disabled"}>Boshlash</button>` : `<button class="btn" data-act="onb-next">Davom etish</button>${window.DY_CLOUD ? `<button class="btn ghost sm" data-act="cloud-login" style="margin-top:14px;text-transform:none;letter-spacing:0">Hisobim bor — Google bilan kirish</button><small id="cloudst" class="muted" style="display:block;margin-top:6px"></small>` : ""}`}</div>
     </div></div>`;
   }
@@ -845,7 +855,8 @@
     if (t.dataset.goal) { S.goal = +t.dataset.goal; save(); renderHome(); return; }
     if (t.dataset.ogoal) { S.goal = +t.dataset.ogoal; renderOnboard(2); return; }
     const a = t.dataset.act;
-    if (a === "onb-next") return renderOnboard(2);
+    if (a === "onb-next") return renderOnboard("dir");
+    if (a === "onb-dir") return renderOnboard(2);
     if (a === "onb-done") { S.onboarded = true; save(); return renderHome(); }
     if (a === "check") return submit();
     if (a === "next") return next();

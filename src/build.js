@@ -2,9 +2,9 @@ const fs=require('fs');
 const css=fs.readFileSync('style.css','utf8');
 const secs=fs.readdirSync('sections').filter(f=>f.endsWith('.js')).sort((a,b)=>parseInt(a.slice(1))-parseInt(b.slice(1))).map(f=>'sections/'+f);
 const js=['data.js','formula.js',...secs,'content.js','app.js'].map(f=>`<script>\n${fs.readFileSync(f,'utf8')}\n</script>`).join('\n');
-const head=`<title>Yetakla — data analitika</title>
+const head=`<title>Yetakla — o'yin orqali o'rganing</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<meta name="description" content="Data analitikani o'zbek tilida, o'yin shaklida o'rganish">
+<meta name="description" content="Yangi kasb va ko'nikmalarni o'zbek tilida, o'yin orqali o'rganing. Birinchi yo'nalish: data analitika">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=JetBrains+Mono:wght@400;700&family=Nunito:wght@400;600;700;800;900&display=swap">
 <style>
