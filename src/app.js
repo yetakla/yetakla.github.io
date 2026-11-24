@@ -298,15 +298,16 @@
     } catch (e) { /* ovoz yo'q */ }
   }
   /* ---------- fon musiqasi: tinch, generativ (C-dur pentatonika) ---------- */
-  let mGain = null, mTimer = null, mNext = 0, mStep = 0, mIdx = 3, mOff = null;
+  let mGain = null, mWet = null, mTimer = null, mNext = 0, mStep = 0, mIdx = 3, mOff = null, mOsc = [];
   const CHORDS = [[261.63, 329.63, 392], [220, 261.63, 329.63], [174.61, 220, 261.63], [196, 246.94, 293.66]]; // C Am F G
   const HALF = 60 / 70 / 2;
   function mtone(f, at, dur, type, vol, att, rev) {
     const o = ac.createOscillator(), g = ac.createGain();
     o.type = type; o.frequency.setValueAtTime(f, at);
     g.gain.setValueAtTime(0.0001, at); g.gain.linearRampToValueAtTime(vol, at + att); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-    o.connect(g); g.connect(mGain); if (rev) g.connect(wet);
+    o.connect(g); g.connect(mGain); if (rev) g.connect(mWet); // aks-sado ham mGain orqali: o'chirganda darhol jim bo'ladi
     o.start(at); o.stop(at + dur + 0.05);
+    mOsc.push(o); o.onended = () => { const k = mOsc.indexOf(o); if (k >= 0) mOsc.splice(k, 1); };
   }
   function musicTick() {
     while (mNext < ac.currentTime + 0.7) {
@@ -320,12 +321,25 @@
       mNext += HALF; mStep++;
     }
   }
+  function musicStopNow() { // foydalanuvchi o'chirdi: shu zahoti jimlik
+    try {
+      clearInterval(mTimer); mTimer = null; clearTimeout(mOff); mOff = null;
+      if (!mGain) return; const now = ac.currentTime;
+      mGain.gain.cancelScheduledValues(now); mGain.gain.setValueAtTime(mGain.gain.value, now); mGain.gain.linearRampToValueAtTime(0.0001, now + 0.04);
+      mOsc.splice(0).forEach(o => { try { o.stop(now + 0.05); } catch (e) { /* */ } });
+    } catch (e) { /* */ }
+  }
   function musicSync() {
     const want = !!S.music && !session && !document.hidden && !!S.onboarded;
     try {
       if (want) {
         audio(); if (ac.state !== "running") return; // brauzer ruxsat bermadi: birinchi bosishda qayta uriniladi
-        if (!mGain) { mGain = ac.createGain(); mGain.gain.value = 0.0001; mGain.connect(master); }
+        if (!mGain) {
+          mGain = ac.createGain(); mGain.gain.value = 0.0001; mGain.connect(master);
+          const d = ac.createDelay(); d.delayTime.value = 0.23; const fb = ac.createGain(); fb.gain.value = 0.3;
+          const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 2200;
+          mWet = ac.createGain(); mWet.gain.value = 0.3; mWet.connect(d); d.connect(lp); lp.connect(fb); fb.connect(d); lp.connect(mGain);
+        }
         clearTimeout(mOff); mOff = null;
         if (!mTimer) { mNext = ac.currentTime + 0.1; mTimer = setInterval(musicTick, 150); musicTick(); }
         mGain.gain.cancelScheduledValues(ac.currentTime); mGain.gain.setTargetAtTime(0.6, ac.currentTime, 0.8);
@@ -938,7 +952,7 @@
     if (a === "home") { leaveLesson(); window.scrollTo(0, 0); return; }
     if (a === "practice") { if (!(history.state && history.state.lesson)) hpush({ tab, lesson: 1 }); return startPractice(); }
     if (a === "sound") { S.sound = !S.sound; save(); renderHome(); sfx("toggle"); return; }
-    if (a === "music") { S.music = !S.music; save(); audio(); renderHome(); return; }
+    if (a === "music") { S.music = !S.music; save(); audio(); if (!S.music) musicStopNow(); renderHome(); return; }
     if (a === "reset") { modal = "reset"; renderHome(); return; }
     if (a === "reset-no") { modal = null; renderHome(); return; }
     if (a === "reset-yes") { modal = null; S = fresh(); save(); tab = "home"; renderOnboard(1); return; }
