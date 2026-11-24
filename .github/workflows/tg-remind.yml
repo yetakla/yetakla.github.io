@@ -1,0 +1,22 @@
+name: Telegram eslatmalari
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+concurrency: tg-bot
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with: { sparse-checkout: bot }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-audit --no-fund
+        working-directory: bot
+      - run: node remind.js
+        working-directory: bot
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}

@@ -4,7 +4,7 @@
   const FIREBASE_CONFIG = g.YETAKLA_FIREBASE || null;
   if (!FIREBASE_CONFIG) return;
   const V = "10.12.2", CDN = "https://www.gstatic.com/firebasejs/" + V + "/";
-  let fb = null, auth = null, db = null, user = null, status = "idle", timer = null, ready = false, pending = null, isNew = false, bTimer = null, bLast = 0, bSent = "", bcache = null;
+  let fb = null, auth = null, db = null, user = null, tgOn = false, fcache = null, refIds = [], status = "idle", timer = null, ready = false, pending = null, isNew = false, bTimer = null, bLast = 0, bSent = "", bcache = null;
 
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const refresh = () => { if (g.DY_APP && g.DY_APP.refresh) g.DY_APP.refresh(); };
@@ -26,6 +26,13 @@
     r.onboarded = !!(a.onboarded || b.onboarded);
     const wa = a.week || "", wb = b.week || "";
     if (wb > wa) { r.week = wb; r.weekXp = b.weekXp || 0; } else if (wa === wb) r.weekXp = Math.max(a.weekXp || 0, b.weekXp || 0);
+    for (const k of ["coins", "freezes"]) r[k] = Math.max(a[k] || 0, b[k] || 0);
+    const qa = a.quests, qb = b.quests;
+    if (qb && (!qa || qb.day > qa.day)) r.quests = qb;
+    else if (qa && qb && qa.day === qb.day) { r.quests = Object.assign({}, qa, { p: Object.assign({}, qb.p, qa.p), got: Object.assign({}, qb.got, qa.got) }); for (const k in qb.p || {}) r.quests.p[k] = Math.max(qa.p[k] || 0, qb.p[k]); }
+    r.port = Object.assign({}, b.port || {}, a.port || {});
+    r.refBy = a.refBy || b.refBy || ""; r.refFrom = a.refFrom || b.refFrom || "";
+    r.refClaimed = Array.from(new Set([].concat(a.refClaimed || [], b.refClaimed || [])));
     return r;
   }
 
@@ -72,13 +79,31 @@
       const snap = await fb.fs.getDoc(fb.fs.doc(db, "users", user.uid));
       const local = g.DY_APP.state();
       isNew = !snap.exists();
+      tgOn = !isNew && !!snap.data().tg;
       if (!isNew) {
         const remote = JSON.parse(snap.data().s || "{}");
         g.DY_APP.replaceState(merge(local, remote));
       }
       ready = true;
       await push();
+      refs();
     } catch (e) { setStatus("error"); }
+  }
+
+  // Do'st taklifi: yangi foydalanuvchi refs/{uid} = {by} yozadi; taklif qilgan o'z bonuslarini o'qib oladi
+  async function refs() {
+    const st = g.DY_APP.state();
+    try {
+      if (st.refFrom && !st.refBy && st.refFrom !== user.uid) {
+        const by = st.refFrom;
+        try { await fb.fs.setDoc(fb.fs.doc(db, "refs", user.uid), { by, at: fb.fs.serverTimestamp() }); st.refBy = by; st.refFrom = ""; g.DY_APP.gift(50, "Do'stingiz taklifi uchun +50 🪙"); }
+        catch (e) { st.refFrom = ""; }
+      }
+      const snap = await fb.fs.getDocs(fb.fs.query(fb.fs.collection(db, "refs"), fb.fs.where("by", "==", user.uid), fb.fs.limit(100)));
+      refIds = []; snap.forEach(d => refIds.push(d.id));
+      const cl = st.refClaimed || (st.refClaimed = []), fresh = refIds.filter(id => !cl.includes(id));
+      if (fresh.length) { fresh.forEach(id => cl.push(id)); g.DY_APP.gift(50 * fresh.length, `${fresh.length} ta do'stingiz qo'shildi: +${50 * fresh.length} 🪙`); }
+    } catch (e) { /* qoidalar hali yo'q yoki internet yo'q */ }
   }
 
   g.DY_CLOUD = {
@@ -100,6 +125,23 @@
         }
         bcache = { t: Date.now(), week: wk, rows, me, uid: user.uid };
         return bcache;
+      } catch (e) { return { error: true }; }
+    },
+    tg: () => tgOn,
+    friendsCache: () => fcache && user && fcache.uid === user.uid && Date.now() - fcache.t < 60000 ? fcache : null,
+    async friends() {
+      if (!user || !fb) return null;
+      const c = this.friendsCache(); if (c) return c;
+      try {
+        const st = g.DY_APP.state(), wk = st.week;
+        if (bTimer || (st.weekXp > 0 && bSent !== wk + ":" + st.weekXp)) await pushBoard(true);
+        if (!refIds.length) await refs();
+        const ids = Array.from(new Set([].concat(refIds, st.refBy ? [st.refBy] : []))).filter(x => x !== user.uid).slice(0, 40);
+        const docs = await Promise.all([user.uid].concat(ids).map(id => fb.fs.getDoc(fb.fs.doc(db, "boards", wk, "users", id)).then(d => d.exists() ? Object.assign({ id }, d.data()) : null).catch(() => null)));
+        const rows = docs.filter(Boolean);
+        if (!rows.some(r => r.id === user.uid)) rows.push({ id: user.uid, name: shortName(user.displayName), wxp: Math.round(st.weekXp || 0) });
+        fcache = { t: Date.now(), uid: user.uid, rows, count: ids.length, idle: ids.length - rows.filter(r => r.id !== user.uid).length };
+        return fcache;
       } catch (e) { return { error: true }; }
     },
     onSave(st) {
@@ -139,6 +181,6 @@
         }
       } catch (err) { setStatus("idle"); const el = document.getElementById("cloudst"); if (el) el.textContent = "Kirib bo'lmadi. Internetni tekshirib, qayta urinib ko'ring."; }
     }
-    if (b.dataset.act === "cloud-logout") { clearTimeout(timer); if (pending) await push(); if (bTimer) await pushBoard(true); bcache = null; bSent = ""; try { await fb.au.signOut(auth); } catch (err) { /* */ } }
+    if (b.dataset.act === "cloud-logout") { clearTimeout(timer); if (pending) await push(); if (bTimer) await pushBoard(true); bcache = null; fcache = null; refIds = []; tgOn = false; bSent = ""; try { await fb.au.signOut(auth); } catch (err) { /* */ } }
   });
 })(typeof window !== "undefined" ? window : globalThis);

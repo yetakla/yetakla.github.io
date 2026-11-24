@@ -17,7 +17,8 @@ const appTag='<script>\n'+fs.readFileSync('app.js','utf8');
 const siteJs=cfg?js.replace(appTag,()=>`<script>\n${cfg}\n</script>\n<script>\n${fs.readFileSync('cloud.js','utf8')}\n</script>\n`+appTag):js;
 const siteBody=`<div id="app"></div>\n${siteJs}`;
 fs.writeFileSync('datayol.html', head+'\n'+body+'\n');
-fs.writeFileSync('datayol-standalone.html', `<!doctype html>\n<html lang="uz">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n${head}\n</head>\n<body>\n${siteBody}\n</body>\n</html>\n`);
+const pwaHead=`<link rel="manifest" href="manifest.webmanifest">\n<meta name="theme-color" content="#1f9d55">\n<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">\n<link rel="apple-touch-icon" href="apple-touch-icon.png">\n<meta name="apple-mobile-web-app-capable" content="yes">\n<meta name="mobile-web-app-capable" content="yes">\n<meta name="apple-mobile-web-app-title" content="Yetakla">\n<meta name="apple-mobile-web-app-status-bar-style" content="default">\n<script>window.YETAKLA_TG_BOT=${JSON.stringify(process.env.TG_BOT||'')};if('serviceWorker' in navigator&&location.protocol==='https:')addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));</script>`;
+fs.writeFileSync('datayol-standalone.html', `<!doctype html>\n<html lang="uz">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n${head}\n${pwaHead}\n</head>\n<body>\n${siteBody}\n</body>\n</html>\n`);
 console.log(fs.statSync('datayol.html').size);
 // Admin panel (faqat sayt uchun): kurs tuzilishi va Firebase konfiguratsiyasi bilan
 if(cfg&&fs.existsSync('admin.tpl.html')){

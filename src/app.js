@@ -102,7 +102,7 @@
   }
 
   /* ---------- state ---------- */
-  const fresh = () => ({ v: 1, xp: 0, todayXp: 0, today: dayStr(), goal: null, streak: 0, bestStreak: 0, lastDay: null, hearts: 5, done: {}, lessonsDone: 0, pool: {}, badges: {}, sound: true, formulasOk: 0, reviewsOk: 0, onboarded: false, week: "", weekXp: 0, music: true });
+  const fresh = () => ({ v: 1, xp: 0, todayXp: 0, today: dayStr(), goal: null, streak: 0, bestStreak: 0, lastDay: null, hearts: 5, done: {}, lessonsDone: 0, pool: {}, badges: {}, sound: true, formulasOk: 0, reviewsOk: 0, onboarded: false, week: "", weekXp: 0, music: true, coins: 0, freezes: 0, quests: null, port: {}, refFrom: "", refBy: "", refClaimed: [], frozeNote: 0 });
   let S;
   function load() {
     try { const raw = localStorage.getItem(KEY); S = raw ? Object.assign(fresh(), JSON.parse(raw)) : fresh(); } catch (e) { S = fresh(); }
@@ -115,6 +115,9 @@
       } catch (e) { /* buzilgan havola — e'tiborsiz */ }
       try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { /* */ }
     }
+    // Do'st taklifi: ?ref=<uid>
+    const rf = /[?&]ref=([A-Za-z0-9]{10,40})/.exec(location.search || "");
+    if (rf) { if (!S.refBy && !S.refFrom) { S.refFrom = rf[1]; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* */ } } try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) { /* */ } }
     rollDay();
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* xotira yo'q — sessiyada saqlanadi */ } if (window.DY_CLOUD) try { window.DY_CLOUD.onSave(S); } catch (e) { /* bulut ixtiyoriy */ } }
@@ -122,15 +125,22 @@
     const t = dayStr();
     if (S.today !== t) { S.today = t; S.todayXp = 0; S.hearts = 5; }
     if (S.week !== weekKey()) { S.week = weekKey(); S.weekXp = 0; }
-    if (S.lastDay && S.lastDay !== t && S.lastDay !== yesterday()) S.streak = 0;
+    if (S.lastDay && S.lastDay !== t && S.lastDay !== yesterday()) {
+      // Olov himoyasi: o'tkazib yuborilgan har kun uchun bittadan sarflanadi
+      const gap = daysBetween(S.lastDay, t) - 1;
+      if (S.streak > 0 && gap > 0 && gap <= (S.freezes || 0)) { S.freezes -= gap; S.lastDay = yesterday(); S.frozeNote = gap; }
+      else S.streak = 0;
+    }
   }
-  function addXp(n) {
+  function daysBetween(a, b) { const p = x => { const [y, m, d] = x.split("-").map(Number); return new Date(y, m - 1, d); }; return Math.round((p(b) - p(a)) / 864e5); }
+  function addXp(n, noQuest) {
     if (n <= 0) return;
     const t = dayStr();
     if (S.lastDay !== t) { S.streak = S.lastDay === yesterday() ? S.streak + 1 : 1; S.lastDay = t; S.bestStreak = Math.max(S.bestStreak, S.streak); }
     if (S.week !== weekKey()) { S.week = weekKey(); S.weekXp = 0; }
     const before = S.todayXp; S.xp += n; S.todayXp += n; S.weekXp = (S.weekXp || 0) + n;
     if (S.goal && before < S.goal && S.todayXp >= S.goal) award("goal");
+    if (!noQuest) questEv("xp", n);
   }
 
   /* ---------- course index ---------- */
@@ -199,15 +209,16 @@
     if (S.streak >= 3) award("streak3"); if (S.streak >= 7) award("streak7");
     if (S.xp >= 100) award("xp100"); if (S.xp >= 500) award("xp500");
     if (S.formulasOk >= 10) award("formula10"); if (S.reviewsOk >= 10) award("review10");
-    COURSE.forEach(sec => { const b = SEC_BADGE[sec.id]; if (b && sec.lessons.length && !sec.soon && secDone(sec.id)) award(b); });
+    COURSE.forEach(sec => { const b = SEC_BADGE[sec.id]; if (b && sec.lessons.length && !sec.soon && secDone(sec.id) && !sec.lessons.some(l => S.done[l.id] && S.done[l.id].skip)) award(b); });
   }
+  let toastOn = false;
   function flushToasts() {
-    if (!toastQ.length) return;
-    const id = toastQ.shift(); const b = BADGES.find(x => x.id === id); if (!b) return flushToasts();
+    if (toastOn || !toastQ.length) return;
+    const id = toastQ.shift(); const b = typeof id === "object" ? id : BADGES.find(x => x.id === id); if (!b) return flushToasts();
     const t = document.createElement("div"); t.className = "toast"; t.style.setProperty("--c", b.c);
-    t.innerHTML = `<span class="ic">${I[b.ic]}</span><span>Yangi yutuq: ${esc(b.name)}</span>`;
+    t.innerHTML = `<span class="ic">${b.emo ? `<span style="font-size:20px">${b.emo}</span>` : I[b.ic]}</span><span>${b.pre === undefined ? "Yangi yutuq: " : b.pre}${esc(b.name)}</span>`;
     document.body.appendChild(t); sfx("badge");
-    setTimeout(() => { t.remove(); flushToasts(); }, 2600);
+    toastOn = true; setTimeout(() => { t.remove(); toastOn = false; flushToasts(); }, 2600);
   }
   const TIERS = [["Bronza", 0, "#b8743a"], ["Kumush", 150, "#8a9aa6"], ["Oltin", 400, "#f5a400"], ["Yoqut", 800, "#e5484d"], ["Olmos", 1500, "#2f6fdb"]];
 
@@ -480,12 +491,12 @@
   }
   const OFFS = [0, 52, 84, 52, 0, -52, -84, -52];
   function mapHTML() {
-    const poolN = Object.keys(S.pool).length;
+    const poolN = Object.keys(S.pool).filter(k => EX[k]).length;
     let h = `<div class="map wrap"><div class="maphead"><button class="back" data-tab="home" aria-label="Asosiyga qaytish">${I.back}<span>Asosiy</span></button><b>Data analitika</b></div>`;
     h += `<div class="practice-cta">${I.repeat.replace("<svg", '<svg style="width:30px;height:30px;color:var(--sky);flex:none"')}<p><b>Takrorlash mashqi</b>${poolN ? `${poolN} ta xato savol sizni kutyapti. Har to'g'ri javob +1 ❤️` : "Har to'g'ri javob +1 ❤️ qaytaradi"}</p><button class="btn sky sm" data-act="practice">Boshlash</button></div>`;
     COURSE.forEach((sec, si) => {
       const locked = sec.soon; const nDone = sec.lessons.filter(l => isDone(l.id)).length;
-      h += `<section><div class="banner ${locked ? "locked" : ""}" style="background:${sec.color}"><div class="t"><div class="eyebrow">${si}-bo'lim</div><h2>${esc(sec.title)}</h2><p>${esc(sec.desc)}</p></div><span class="pill">${locked ? "🔒 Tez kunda" : `${nDone}/${sec.lessons.length}`}</span></div><div class="path">`;
+      h += `<section><div class="banner ${locked ? "locked" : ""}" style="background:${sec.color}"><div class="t"><div class="eyebrow">${si}-bo'lim</div><h2>${esc(sec.title)}</h2><p>${esc(sec.desc)}</p></div>${!locked && si > 0 && sec.lessons.length && lessonState(LESSONS.findIndex(x => x.l.id === sec.lessons[0].id)) === "locked" ? `<button class="pill jump" data-skip="${sec.id}" aria-label="Sinov bilan ${si}-bo'limga sakrash">⏩ Sakrash</button>` : `<span class="pill">${locked ? "🔒 Tez kunda" : `${nDone}/${sec.lessons.length}`}</span>`}</div><div class="path">`;
       if (si < 2) h += `<div class="side-mascot ${si ? "r" : "l"}" style="top:${si ? 70 : 24}%">${mascot(si ? "think" : "happy", "float")}</div>`;
       sec.lessons.forEach((l, li) => {
         const idx = LESSONS.findIndex(x => x.l.id === l.id); const st = lessonState(idx);
@@ -520,9 +531,13 @@
     return `<div class="page wrap"><h2>Profil</h2>
       <div class="stats"><div class="card"><b>${S.xp}</b><span>Jami XP</span></div><div class="card"><b>${S.lessonsDone}</b><span>Tugatilgan darslar</span></div><div class="card"><b>${S.streak} 🔥</b><span>Joriy olov</span></div><div class="card"><b>${S.bestStreak}</b><span>Eng uzun olov</span></div></div>
       ${window.DY_CLOUD ? window.DY_CLOUD.card() : ""}
+      ${friendsCard()}
+      ${portfolioCard()}
       <h3>Kunlik maqsad</h3><div class="goals" style="max-width:none">${g(20, "Yengil", "≈ 2 dars")}${g(50, "Jiddiy", "≈ 4 dars")}${g(100, "Kuchli", "≈ 8 dars")}</div>
       <div class="card toggle"><span>Ovoz effektlari</span><button class="switch ${S.sound ? "on" : ""}" data-act="sound" aria-label="Ovoz"></button></div>
       <div class="card toggle"><span>Fon musiqasi <small class="muted" style="display:block;font-size:13px;font-weight:600">Asosiy sahifa va xaritada tinch kuy</small></span><button class="switch ${S.music ? "on" : ""}" data-act="music" aria-label="Fon musiqasi"></button></div>
+      ${tgCard()}
+      ${canInstall() ? `<div class="card toggle"><span>Telefonga o'rnatish <small class="muted" style="display:block;font-size:13px;font-weight:600">Ilovadek ochiladi, internetsiz ham ishlaydi</small></span><button class="btn sm" data-act="install">O'rnatish</button></div>` : ""}
       ${badgesHTML()}
       <div class="card"><h3>Kurs haqida</h3><p class="muted" style="margin-top:6px">11 bo'lim: analitik fikrlash → Excel → statistika → SQL → tozalash → Power BI → Tableau va Superset → Python → AI → karyera. Hozir ochiq bo'limlar: ${COURSE.filter(s => !s.soon).length} ta. Barcha misollar to'qima ma'lumotlar.</p></div>
       <div class="card"><p class="muted">${window.DY_CLOUD && window.DY_CLOUD.user() ? "Progress hisobingizda va shu brauzerda saqlanadi." : "Progress shu brauzerda saqlanadi."} Har kuni jonlar 5 taga to'ladi.</p><div class="row" style="margin-top:10px">${modal === "reset" ? `<button class="btn red sm" data-act="reset-yes">Ha, hammasini o'chir</button><button class="btn ghost sm" data-act="reset-no">Bekor</button>` : `<button class="btn ghost sm" data-act="reset">Progressni tozalash</button>`}</div></div>
@@ -535,16 +550,21 @@
     const first = u && u.displayName ? u.displayName.trim().split(/\s+/)[0] : "";
     const g = S.goal || 20, met = S.todayXp >= g, hr = new Date().getHours(), pct = total ? Math.round(100 * done / total) : 0;
     const hello = (hr < 5 ? "Xayrli tun" : hr < 11 ? "Xayrli tong" : hr < 18 ? "Xayrli kun" : "Xayrli kech") + (first ? ", " + first : "") + "!";
-    const say = met ? "Bugungi maqsad bajarildi. Barakalla!" : S.todayXp ? `Maqsadga ${g - S.todayXp} XP qoldi.` : S.streak ? "Olovni o'chirmang: bugun bitta dars yetarli." : "Bugun bitta dars bilan boshlaymiz.";
+    const froze = S.frozeNote; if (froze) { S.frozeNote = 0; save(); }
+    const poolN = Object.keys(S.pool).filter(k => EX[k]).length;
+    const say = froze ? `❄️ Olov himoyasi ${S.streak} kunlik olovingizni saqlab qoldi!` : met ? "Bugungi maqsad bajarildi. Barakalla!" : S.todayXp ? `Maqsadga ${g - S.todayXp} XP qoldi.` : S.streak ? "Olovni o'chirmang: bugun bitta dars yetarli." : "Bugun bitta dars bilan boshlaymiz.";
     return `<div class="page wrap home">
       <div class="hello">${mascot(met ? "happy" : "ok")}<div class="say"><b>${esc(hello)}</b><span>${say}</span></div></div>
       ${nx ? `<button class="cont" style="--c:${nx.sec.color}" data-start="${nx.l.id}"><span class="eyebrow">${nx.si}-bo'lim · ${esc(nx.sec.title)}</span><b>${esc(nx.l.title)}</b><span class="go">${done ? "Davom etish" : "Boshlash"}</span></button>`
         : `<div class="card cont-done"><b>Kurs tugatildi! 🎉</b><span class="muted">Takrorlash mashqlari bilan bilimni mustahkamlang.</span></div>`}
+      ${installHTML()}
+      ${poolN ? `<button class="card course mist" data-act="mistakes"><span class="ic">${I.repeat}</span><span class="txt"><b>Xatolar ustida ishlash</b><small>${poolN} ta savolni qayta mashq qiling · +1 ❤️ har to'g'ri javobga</small></span><span class="chev">›</span></button>` : ""}
       <div class="today">
         <div class="card"><b>${S.todayXp}<small>/${g}</small></b><span>Bugungi XP</span><i class="bar"><i style="width:${Math.min(100, 100 * S.todayXp / g)}%"></i></i></div>
         <div class="card"><b>${S.streak} 🔥</b><span>Olov</span></div>
         <button class="card" data-tab="rank"><b>${S.weekXp || 0}</b><span>Haftalik XP ›</span></button>
       </div>
+      ${questsHTML()}
       <h3>Yo'nalishlar</h3>
       <button class="card course" data-tab="map"><span class="ic">${I.chart}</span><span class="txt"><b>Data analitika</b><small>${done}/${total} dars · ${pct}%</small><i class="bar"><i style="width:${pct}%"></i></i></span><span class="chev">›</span></button>
       <div class="card course soon"><span class="ic">${I.lock}</span><span class="txt"><b>Yangi yo'nalishlar</b><small>Tez kunda</small></span></div>
@@ -563,15 +583,27 @@
     let body;
     if (!C) body = `<div class="card muted">Reyting saytda ishlaydi. Bu yerda progress faqat shu qurilmada.</div>`;
     else if (!C.user()) body = `<div class="card rank-in">${mascot("think")}<b>Reytingga qo'shiling</b><p class="muted">Google bilan kiring: haftalik XP'ingiz boshqalar bilan solishtiriladi, progressingiz ham saqlanib qoladi.</p><button class="btn gbtn" data-act="cloud-login"><span>Google bilan kirish</span></button><small id="cloudst" class="muted"></small></div>`;
-    else body = `<div id="rankbox">${rankRows(C.boardCache())}</div>`;
+    else body = `<div class="seg" role="tablist"><button class="${rankView === "all" ? "on" : ""}" data-act="rv-all" role="tab">Hammasi</button><button class="${rankView === "fr" ? "on" : ""}" data-act="rv-fr" role="tab">Do'stlar</button></div><div id="rankbox">${rankView === "fr" ? friendRows(C.friendsCache && C.friendsCache()) : rankRows(C.boardCache())}</div>`;
     return `<div class="page wrap"><div class="rank-head"><h2>Haftalik reyting</h2><span class="muted">${left === 7 ? "Yangi hafta bugun boshlandi" : `Hafta tugashiga ${left} kun`} · Siz: ${S.weekXp || 0} XP</span></div>${body}</div>`;
+  }
+  let rankView = "all";
+  function friendRows(d) {
+    const inv = `<div class="card invite-cta">${mascot("happy")}<div><b>Do'stlaringizni chaqiring</b><p class="muted">Havolangiz orqali kirgan har bir do'st uchun ikkalangiz ham +${REF_GIFT} 🪙 olasiz.</p><button class="btn sm" data-act="invite">Taklif havolasi</button></div></div>`;
+    if (!d) return `<div class="card muted">Yuklanmoqda…</div>`;
+    if (d.error) return `<div class="card muted">Do'stlar ro'yxatini yuklab bo'lmadi. Internetni tekshirib, qayta oching.</div>`;
+    if (!d.count) return inv;
+    const rows = d.rows.slice().sort((a, b) => b.wxp - a.wxp);
+    return `<ol class="rank">${rows.map((r, i) => `<li class="${r.id === d.uid ? "me" : ""}"><span class="pos p${i + 1}">${i + 1}</span><span class="av">${esc((r.name || "?").trim()[0] || "?").toUpperCase()}</span><b>${esc(r.name || "Nomsiz")}</b><span class="x">${r.wxp} XP</span></li>`).join("")}</ol>${d.idle ? `<p class="muted" style="text-align:center">Yana ${d.idle} ta do'stingiz bu hafta hali o'qimagan.</p>` : ""}${inv}`;
   }
   function renderHome() {
     document.body.classList.remove("in-lesson");
     $app.innerHTML = `<div class="app">${topbar()}${tab === "home" ? homeHTML() : tab === "map" ? mapHTML() : tab === "rank" ? rankHTML() : profileHTML()}</div>${tabbar()}`;
     flushToasts(); musicSync();
     const C = window.DY_CLOUD;
-    if (tab === "rank" && C && C.user()) C.board().then(d => { const el = document.getElementById("rankbox"); if (el && tab === "rank" && d) el.innerHTML = rankRows(d); });
+    if (tab === "rank" && C && C.user()) {
+      if (rankView === "fr" && C.friends) C.friends().then(d => { const el = document.getElementById("rankbox"); if (el && tab === "rank" && rankView === "fr" && d) el.innerHTML = friendRows(d); });
+      else C.board().then(d => { const el = document.getElementById("rankbox"); if (el && tab === "rank" && rankView === "all" && d) el.innerHTML = rankRows(d); });
+    }
   }
   const hpush = st => { try { history.pushState(st, ""); } catch (e) { /* iframe */ } };
   let pendingStart = null;
@@ -631,7 +663,14 @@
     session = { kind: "lesson", l, sec, q, i: 0, total: q.filter(s => s.t !== "theory").length, firstOk: 0, wrongIds: new Set(), seen: new Set(), t0: Date.now(), xp: 0, retry: S.done[l.id] ? true : false };
     renderStep();
   }
-  function startPractice() {
+  function startPractice(mode) {
+    if (mode === "mistakes") {
+      const ids = Object.keys(S.pool).filter(k => EX[k]).sort((a, b) => (S.pool[a].day || "").localeCompare(S.pool[b].day || "") || S.pool[a].box - S.pool[b].box).slice(0, 8);
+      if (ids.length) {
+        session = { kind: "practice", l: { id: "practice", title: "Xatolar ustida ishlash", simple: "Bu yerda siz xato qilgan savollar qaytadan chiqadi. Har bir savol 3 marta to'g'ri yechilgach, ro'yxatdan chiqadi." }, sec: { color: "#2f6fdb" }, q: ids.map(k => Object.assign({ id: k, review: true }, EX[k].st, { _order: null, _draft: undefined })), i: 0, total: ids.length, firstOk: 0, wrongIds: new Set(), seen: new Set(), t0: Date.now(), xp: 0 };
+        return renderStep();
+      }
+    }
     let ids = Object.keys(S.pool).filter(k => EX[k]);
     const doneLessons = LESSONS.filter(x => isDone(x.l.id)).map(x => x.l.id);
     const extra = Object.keys(EX).filter(k => doneLessons.includes(EX[k].l.id) && !ids.includes(k));
@@ -645,7 +684,7 @@
   let ctl = null, phase = "answer";
   function lessonShell(inner, foot) {
     const done = session.i; const pct = Math.round(done / session.q.length * 100);
-    return `<div class="layer" id="layer"><div class="lbar"><button class="x" data-act="quit" aria-label="Chiqish">${I.close}</button><div class="prog"><i style="width:${pct}%"></i></div><span class="stat hp">${session.kind === "practice" ? "🔁" : "❤️"} ${S.hearts}</span></div>
+    return `<div class="layer" id="layer"><div class="lbar"><button class="x" data-act="quit" aria-label="Chiqish">${I.close}</button><div class="prog"><i style="width:${pct}%"></i></div><span class="stat hp">${hpLabel()}</span></div>
       <div class="lbody" id="lbody">${inner}</div><div id="lfoot">${foot}</div></div>`;
   }
   function footAnswer() {
@@ -653,6 +692,7 @@
     if (st.t === "theory") return `<div class="lfoot"><button class="btn ghost help" data-act="simple">Tushunmadim 🤔</button><button class="btn main" data-act="next">Davom etish</button></div>`;
     return `<div class="lfoot"><button class="btn ghost help" data-act="simple" title="Soddaroq tushuntirish">🤔</button><button class="btn main" data-act="check" id="checkbtn" ${ctl && ctl.ready() ? "" : "disabled"}>Tekshirish</button></div>`;
   }
+  const hpLabel = () => session.kind === "test" ? `🛡️ ${TEST_LIVES - session.mist}` : `${session.kind === "practice" ? "🔁" : "❤️"} ${S.hearts}`;
   function refreshCheck() { const b = document.getElementById("checkbtn"); if (b) b.disabled = !(ctl && ctl.ready()); }
   function renderStep() {
     if (session && session.i === 0) musicSync();
@@ -661,7 +701,7 @@
     const st = session.q[session.i]; phase = "answer"; ctl = null;
     let head = "";
     if (st.t !== "theory") {
-      head = `<div class="kind">${st.review ? '<span class="tag">🔁 Takrorlash</span>' : ""}${session.l.boss ? '<span class="tag boss">Boss</span>' : ""}${st.caseKind || st.context ? "Mini-keys" : KIND[st.t]}</div>`;
+      head = `<div class="kind">${session.kind === "test" ? '<span class="tag">⏩ Sinov</span>' : ""}${st.review ? '<span class="tag">🔁 Takrorlash</span>' : ""}${session.l.boss ? '<span class="tag boss">Boss</span>' : ""}${st.caseKind || st.context ? "Mini-keys" : KIND[st.t]}</div>`;
     }
     const body = st.t === "theory" ? theoryHTML(st) : head + exerciseHTML(st);
     $app.innerHTML = lessonShell(body, footAnswer());
@@ -841,15 +881,21 @@
     const first = !session.seen.has(st.id); session.seen.add(st.id);
     if (r.ok) {
       session.combo = (session.combo || 0) + 1; sfx("ok", session.combo - 1);
-      if (first) { session.firstOk++; const gain = session.kind === "practice" ? 5 : session.retry ? 0 : 10; session.xp += gain; }
+      if (first) { session.firstOk++; const gain = session.kind === "test" ? 0 : session.kind === "practice" ? 5 : session.retry ? 0 : 10; session.xp += gain; }
       if (session.kind === "practice" && S.hearts < 5) S.hearts++;
-      if (st.review) { const p = S.pool[st.id]; if (p) { p.box++; if (p.box >= 2) delete S.pool[st.id]; else p.due = S.lessonsDone + 2; } S.reviewsOk++; }
+      if (st.review) { const p = S.pool[st.id]; if (p) { p.box++; if (p.box >= 3) delete S.pool[st.id]; else { p.due = S.lessonsDone + 2; const d = new Date(); d.setDate(d.getDate() + (p.box === 1 ? 1 : 3)); p.day = dayStr(d); } } S.reviewsOk++; questEv("review"); }
+      questEv("combo", session.combo);
+      if (st.t === "sql" || st.t === "formula") questEv("live");
+      if (st.t === "sql" && session.kind === "lesson" && session.l.id === FINAL) { const ed = document.getElementById("sqled"); if (ed) S.port[st.id] = ed.value.slice(0, 4000); }
     } else {
-      session.combo = 0; sfx("bad"); if (session.kind !== "practice") sfx("heart");
+      session.combo = 0; sfx("bad");
       session.wrongIds.add(st.id);
-      if (session.kind !== "practice") S.hearts = Math.max(0, S.hearts - 1);
-      S.pool[st.id] = { box: 0, due: S.lessonsDone + 1 };
-      if (session.kind !== "practice") session.q.push(Object.assign({}, st, { _order: null, _draft: undefined }));
+      if (session.kind === "test") session.mist++;
+      else {
+        if (session.kind !== "practice") { sfx("heart"); S.hearts = Math.max(0, S.hearts - 1); }
+        S.pool[st.id] = { box: 0, due: S.lessonsDone + 1, day: dayStr() };
+        if (session.kind !== "practice") session.q.push(Object.assign({}, st, { _order: null, _draft: undefined }));
+      }
     }
     save();
     const use = st.use;
@@ -858,13 +904,14 @@
       ? `<div class="fb good"><div class="head">${mascot("happy")}<h3>${pick(PRAISE)}</h3></div><div class="txt">${why}${use ? `<span class="use"><b>Ishda:</b> ${esc(use)}</span>` : ""}</div><button class="btn" data-act="next">Davom etish</button></div>`
       : `<div class="fb bad"><div class="head">${mascot("sad")}<h3>${pick(CHEER)}</h3></div><div class="txt">${st.t === "match" ? `<span>${esc(r.msg)} Juftlar keyinroq yana chiqadi.</span>` : `<span class="ans">To'g'ri javob: ${ctl.code ? `<code>${esc(ctl.answer)}</code>` : esc(ctl.answer)}</span>`}${r.msg && st.t !== "match" ? `<span>${esc(r.msg)}</span>` : ""}${why}</div><button class="btn" data-act="next">Tushundim</button></div>`;
     document.getElementById("lfoot").innerHTML = fb;
-    const hp = document.querySelector(".lbar .stat.hp"); if (hp) hp.innerHTML = `${session.kind === "practice" ? "🔁" : "❤️"} ${S.hearts}`;
+    const hp = document.querySelector(".lbar .stat.hp"); if (hp) hp.innerHTML = hpLabel();
     document.getElementById("lbody").querySelectorAll("button,textarea,input").forEach(x => { if (!x.closest(".schema")) x.disabled = true; });
   }
   function next() {
     const st = session.q[session.i];
     if (st && st.t !== "theory" && phase !== "result") return;
-    if (session.kind !== "practice" && S.hearts <= 0 && phase === "result") { session.i++; renderNoHearts(); return; }
+    if (session.kind === "test" && session.mist >= TEST_LIVES && phase === "result") { renderTestFail(); return; }
+    if (session.kind === "lesson" && S.hearts <= 0 && phase === "result") { session.i++; renderNoHearts(); return; }
     session.i++; renderStep();
   }
 
@@ -881,17 +928,26 @@
       S.done[session.l.id] = { acc: Math.max(acc, prev ? prev.acc : 0), ts: Date.now() };
       if (perfect) award("perfect");
       if (session.l.boss) award("boss");
+      questEv("lesson"); if (perfect) questEv("perfect");
+    }
+    let opened = 0;
+    if (session.kind === "test") {
+      const si = COURSE.findIndex(s => s.id === session.sid);
+      LESSONS.forEach(x => { if (x.si < si && x.l.steps.length && !isDone(x.l.id)) { S.done[x.l.id] = { acc: 0, ts: Date.now(), skip: 1 }; S.lessonsDone++; opened++; } });
+      bonus = 30;
     }
     const tierOf = x => TIERS.reduce((a, t, i) => x >= t[1] ? i : a, 0), tier0 = tierOf(S.xp);
     const secWas = session.kind === "lesson" && session.sec ? session.sec.lessons.filter(l => l.id !== session.l.id).every(l => isDone(l.id)) && !session.retry : false;
     const total = session.xp + bonus; addXp(total); checkBadges(); save();
     sfx(secWas || tierOf(S.xp) > tier0 ? "fanfare" : "done");
     const boss = session.l.boss && session.kind === "lesson";
+    const secNo = session.sec ? COURSE.indexOf(session.sec) : -1;
+    lastWin = session.kind === "test" ? `Sinov bilan ${COURSE.findIndex(s => s.id === session.sid)}-bo'limga sakradim!` : secWas && secNo >= 0 ? `${secNo}-bo'lim: “${session.sec.title}” tugatildi!` : session.kind === "lesson" ? `“${session.l.title}” darsini tugatdim!` : null;
     $app.innerHTML = `<div class="layer"><div class="center">${mascot("happy", "float")}
-      <h1>${session.kind === "practice" ? "Takrorlash tugadi!" : boss ? "Boss yengildi! 👑" : "Dars tugadi!"}</h1>
-      <p>${perfect ? "Birorta ham xato yo'q — ajoyib natija!" : session.kind === "practice" ? `Jonlar: ❤️ ${S.hearts}. Endi yangi darsga tayyorsiz.` : "Xato qilingan savollar keyingi darslarda qayta chiqadi."}${bonus ? " Xatosiz dars uchun +20 bonus XP." : ""}</p>
+      <h1>${session.kind === "test" ? "Sinovdan o'tdingiz! 🚀" : session.kind === "practice" ? "Takrorlash tugadi!" : boss ? "Boss yengildi! 👑" : "Dars tugadi!"}</h1>
+      <p>${session.kind === "test" ? `${opened} ta dars ochildi. +30 XP bonus.` : (perfect ? "Birorta ham xato yo'q — ajoyib natija!" : session.kind === "practice" ? `Jonlar: ❤️ ${S.hearts}. Endi yangi darsga tayyorsiz.` : "Xato qilingan savollar keyingi darslarda qayta chiqadi.") + (bonus ? " Xatosiz dars uchun +20 bonus XP." : "")}</p>
       <div class="endstats"><div class="es" style="--c:var(--sun)"><span>Jami XP</span><b>⚡ ${total}</b></div><div class="es" style="--c:var(--green)"><span>Aniqlik</span><b>${acc}%</b></div><div class="es" style="--c:var(--sky)"><span>Vaqt</span><b>${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}</b></div></div>
-      <div class="foot-center"><button class="btn" data-act="home">Davom etish</button></div></div></div>`;
+      <div class="foot-center"><button class="btn" data-act="home">Davom etish</button>${lastWin ? `<button class="btn ghost" data-act="share-win">Natijani ulashish</button>` : ""}</div></div></div>`;
     confetti();
     session = null;
   }
@@ -926,10 +982,204 @@
     requestAnimationFrame(step);
   }
 
+  /* ---------- kunlik vazifalar va tangalar ---------- */
+  const QUESTS = {
+    lesson1: { t: "1 ta dars tugating", n: 1, ev: "lesson" },
+    lesson2: { t: "2 ta dars tugating", n: 2, ev: "lesson" },
+    perfect: { t: "1 ta darsni xatosiz tugating", n: 1, ev: "perfect" },
+    xp30: { t: "30 XP to'plang", n: 30, ev: "xp" },
+    review: { t: "3 ta takrorlash savoliga to'g'ri javob bering", n: 3, ev: "review" },
+    combo: { t: "Ketma-ket 5 ta to'g'ri javob bering", n: 5, ev: "combo", max: true },
+    live: { t: "2 ta jonli SQL yoki formula yozing", n: 2, ev: "live" }
+  };
+  const Q_REWARD = 10, FREEZE_COST = 30, FREEZE_MAX = 2, REF_GIFT = 50;
+  const SITE = "https://yetakla.github.io/";
+  function quests() {
+    const t = dayStr();
+    if (!S.quests || S.quests.day !== t) {
+      let h = 7; for (const c of t) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+      const rest = ["perfect", "xp30", "review", "combo"]; if (S.formulasOk > 0 || S.badges.first_sql) rest.push("live");
+      const ids = [(S.goal || 20) >= 50 ? "lesson2" : "lesson1"];
+      while (ids.length < 3) { ids.push(rest.splice(h % rest.length, 1)[0]); h = Math.floor(h / 5) + 11; }
+      S.quests = { day: t, ids, p: {}, got: {} };
+    }
+    return S.quests;
+  }
+  function questEv(ev, n) {
+    if (!S.onboarded) return;
+    const q = quests(); n = n || 1;
+    q.ids.forEach(id => {
+      const d = QUESTS[id]; if (!d || d.ev !== ev || q.got[id]) return;
+      q.p[id] = d.max ? Math.max(q.p[id] || 0, n) : (q.p[id] || 0) + n;
+      if (q.p[id] >= d.n) { q.got[id] = 1; S.coins = (S.coins || 0) + Q_REWARD; addXp(Q_REWARD, true); toastQ.push({ name: d.t, pre: "Vazifa bajarildi: ", emo: "🎯", c: "#f5a400" }); }
+    });
+    if (!q.all && q.ids.every(id => q.got[id])) { q.all = 1; S.coins += 20; toastQ.push({ name: "+20 🪙 bonus", pre: "Barcha vazifalar bajarildi! ", emo: "🏆", c: "#1f9d55" }); }
+  }
+  function gift(n, name) { S.coins = (S.coins || 0) + n; toastQ.push({ name, pre: "", emo: "🎁", c: "#7c5cff" }); save(); if (!session) renderHome(); }
+  function questsHTML() {
+    const q = quests(), fz = S.freezes || 0, can = fz < FREEZE_MAX && (S.coins || 0) >= FREEZE_COST;
+    return `<div class="card quests"><div class="qhead"><h3>Kunlik vazifalar</h3><span class="coins" title="Tangalar">🪙 ${S.coins || 0}</span></div>
+      ${q.ids.map(id => { const d = QUESTS[id], v = Math.min(d.n, q.p[id] || 0), ok = !!q.got[id]; return `<div class="quest ${ok ? "ok" : ""}"><span class="qi">${ok ? I.check : I.target}</span><span class="qt"><b>${esc(d.t)}</b><i class="bar"><i style="width:${Math.round(100 * v / d.n)}%"></i></i></span><span class="qn">${ok ? `+${Q_REWARD} 🪙` : `${v}/${d.n}`}</span></div>`; }).join("")}
+      <div class="freeze"><span class="fz-ic">❄️</span><span class="qt"><b>Olov himoyasi · ${fz}/${FREEZE_MAX}</b><small>Bir kun o'tkazib yuborsangiz ham olov o'chmaydi</small></span><button class="btn sky sm" data-act="buy-freeze" ${can ? "" : "disabled"}>${fz >= FREEZE_MAX ? "To'liq" : `${FREEZE_COST} 🪙`}</button></div></div>`;
+  }
+
+  /* ---------- telefonga o'rnatish (PWA) ---------- */
+  let installEv = null;
+  const isStandalone = () => (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEv = e; if (S && !session && S.onboarded && tab === "home") renderHome(); });
+  addEventListener("appinstalled", () => { installEv = null; if (S && !session) renderHome(); });
+  const canInstall = () => !isStandalone() && !!window.DY_CLOUD && (installEv || isIOS());
+  function installHTML() {
+    if (!canInstall() || (S.installHide && S.installHide > dayStr())) return "";
+    return `<div class="card install"><span class="ic">📲</span><span class="txt"><b>Telefonga o'rnating</b><small>Bosh ekrandan bir bosishda oching, internetsiz ham ishlaydi.</small></span><button class="x" data-act="install-no" aria-label="Yopish">${I.close}</button><button class="btn sm" data-act="install">O'rnatish</button></div>`;
+  }
+  async function doInstall() {
+    if (installEv) { installEv.prompt(); try { const r = await installEv.userChoice; if (r && r.outcome === "accepted") installEv = null; } catch (e) { /* */ } renderHome(); return; }
+    const m = document.createElement("div"); m.className = "sheet-modal";
+    m.innerHTML = `<div class="card" role="dialog" aria-label="O'rnatish"><div class="say">${mascot("happy")}<div class="sb">iPhone'da 3 qadam:</div></div>
+      <ol class="steps"><li>Saytni <b>Safari</b>da oching.</li><li>Pastdagi <b>Ulashish</b> tugmasini bosing <span class="kbd">□↑</span></li><li><b>“Bosh ekranga qo'shish”</b> (Add to Home Screen) ni tanlang.</li></ol>
+      <button class="btn" data-act="close-simple">Tushundim</button></div>`;
+    m.addEventListener("click", e => { if (e.target === m || e.target.closest('[data-act="close-simple"]')) m.remove(); });
+    document.body.appendChild(m);
+  }
+
+  /* ---------- sakrash sinovi (joylashtirish testi) ---------- */
+  const TEST_LIVES = 3;
+  function askTest(sid) {
+    const si = COURSE.findIndex(s => s.id === sid), n = LESSONS.filter(x => x.si < si && x.l.steps.length && !isDone(x.l.id)).length;
+    const m = document.createElement("div"); m.className = "sheet-modal";
+    m.innerHTML = `<div class="card" role="dialog" aria-label="Sakrash sinovi"><div class="say">${mascot("think")}<div class="sb">Bilimingiz bormi? Isbotlang!</div></div>
+      <h3>${si}-bo'limga sakrash</h3><p class="muted" style="font-size:16px">Oldingi bo'limlardan 10 ta savol. ${TEST_LIVES} marta xato qilsangiz, sinov to'xtaydi. O'tsangiz, ${n} ta dars ochiladi va +30 XP olasiz.</p>
+      <button class="btn" data-act="test-go" data-sid="${sid}">Sinovni boshlash</button><button class="btn ghost" data-act="close-simple">Bekor qilish</button></div>`;
+    m.addEventListener("click", e => { if (e.target === m || e.target.closest('[data-act="close-simple"],[data-act="test-go"]')) m.remove(); });
+    document.body.appendChild(m);
+  }
+  function startTest(sid) {
+    const si = COURSE.findIndex(s => s.id === sid), sec = COURSE[si];
+    const prev = COURSE.slice(0, si).filter(s => !s.soon && s.lessons.some(l => l.steps.length && !isDone(l.id)));
+    const per = Math.max(1, Math.ceil(10 / Math.max(1, prev.length)));
+    let ids = [];
+    prev.forEach(s => {
+      const ks = shuffle(Object.keys(EX).filter(k => !isDone(EX[k].l.id) && s.lessons.some(l => l.id === EX[k].l.id) && EX[k].st.t !== "match"));
+      const quick = ks.filter(k => !/^(sql|formula)$/.test(EX[k].st.t)), live = ks.filter(k => /^(sql|formula)$/.test(EX[k].st.t));
+      const L = per >= 3 ? Math.min(1, live.length) : 0; ids = ids.concat(quick.slice(0, per - L), live.slice(0, L));
+    });
+    ids = ids.slice(0, 10);
+    hpush({ tab, lesson: 1 });
+    session = { kind: "test", sid, l: { id: "test", title: "Sakrash sinovi", simple: "Bu sinov oldingi bo'limlardan. Bilsangiz — o'tasiz, bilmasangiz — darslar sizni kutadi." }, sec: { color: sec.color }, q: ids.map(k => Object.assign({ id: k }, EX[k].st, { _order: null, _draft: undefined })), i: 0, total: ids.length, firstOk: 0, wrongIds: new Set(), seen: new Set(), t0: Date.now(), xp: 0, mist: 0 };
+    renderStep();
+  }
+  function renderTestFail() {
+    $app.innerHTML = `<div class="layer"><div class="center">${mascot("sad")}<h1>Bu safar o'xshamadi</h1><p>Hechqisi yo'q! Darslarni ketma-ket o'tib bilimni mustahkamlang. Sinovni istalgan vaqt qayta topshirish mumkin.</p>
+      <div class="foot-center"><button class="btn" data-act="home">Xaritaga qaytish</button></div></div></div>`;
+    session = null;
+  }
+
+  /* ---------- portfolio (yakuniy loyiha hisoboti) ---------- */
+  const FINAL = "s10l5";
+  function portfolioCard() {
+    if (!LESSONS.some(x => x.l.id === FINAL)) return "";
+    const done = isDone(FINAL);
+    return `<div class="card portf"><div class="pf-row"><span class="ic">💼</span><span class="txt"><b>Portfolio loyiham</b><small>${done ? "“Mijozlar qiymati” tahlili: sizning SQL so'rovlaringiz, natijalar va xulosalar." : "Yakuniy loyihani (10-bo'lim) tugatsangiz, shu yerda tayyor portfolio hisobotingiz paydo bo'ladi."}</small></span>${done ? "" : `<span class="lockic">${I.lock}</span>`}</div>
+      ${done ? `<div class="row"><button class="btn sm" data-act="port-html">Hisobot</button><button class="btn ghost sm" data-act="port-md">README.md</button></div><small id="portst" class="muted"></small>` : ""}</div>`;
+  }
+  async function buildPortfolio() {
+    const L = LESSONS.find(x => x.l.id === FINAL).l, steps = expand(L);
+    const theory = L.steps.find(s => s.t === "theory"), cas = L.steps.find(s => s.t === "case");
+    const out = [];
+    for (const s of steps.filter(s => s.t === "sql")) {
+      let q = String(S.port[s.id] || s.solution).trim(), r;
+      try { r = await runSQL(q); } catch (e) { q = s.solution; r = await runSQL(q); }
+      out.push({ task: s.task, sql: q, r, use: s.use });
+    }
+    const finds = cas ? cas.steps.map(c => [c.q, c.o[c.a]]) : [];
+    const C = window.DY_CLOUD, u = C && C.user();
+    return { title: "Mijozlar qiymati tahlili", who: u && u.displayName ? u.displayName : "", date: dayStr(), brief: theory ? theory.text : "", story: cas ? cas.story : "", out, finds };
+  }
+  function portfolioHTMLDoc(P) {
+    const tbl = r => `<table><thead><tr>${r.cols.map(c => `<th>${esc(c)}</th>`).join("")}</tr></thead><tbody>${r.rows.slice(0, 20).map(row => `<tr>${row.map(v => `<td>${v === null ? "NULL" : esc(v)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+    return `<!doctype html><html lang="uz"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(P.title)} — portfolio</title>
+<style>body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;max-width:780px;margin:0 auto;padding:24px 16px 48px;color:#16301e;background:#fff;line-height:1.5}h1{font-size:28px;margin:0 0 4px}h2{font-size:20px;margin:28px 0 8px;border-bottom:2px solid #d5e2d4;padding-bottom:4px}.meta{color:#5b7062;font-size:14px}pre{background:#10261a;color:#d7f5df;padding:12px 14px;border-radius:10px;overflow-x:auto;font-size:13px;white-space:pre-wrap;word-break:break-word}table{border-collapse:collapse;font-size:14px;margin:8px 0;display:block;overflow-x:auto}th,td{border:1px solid #d5e2d4;padding:6px 10px;text-align:left;white-space:nowrap}th{background:#e8f0e7}.use{background:#fff1cc;border-radius:8px;padding:8px 12px;font-size:14px}li{margin:6px 0}.foot{margin-top:36px;color:#5b7062;font-size:13px}</style></head><body>
+<h1>${esc(P.title)}</h1><div class="meta">${P.who ? esc(P.who) + " · " : ""}${P.date} · SQL (SQLite) · Yetakla yakuniy loyihasi</div>
+<h2>Topshiriq</h2><p>${esc(P.brief)}</p>
+${P.out.map((o, i) => `<h2>${i + 1}. ${esc(o.task)}</h2><pre>${esc(o.sql)}</pre>${tbl(o.r)}${o.use ? `<p class="use">${esc(o.use)}</p>` : ""}`).join("")}
+<h2>Xulosa va tavsiyalar</h2><p>${esc(P.story)}</p><ul>${P.finds.map(f => `<li><b>${esc(f[0])}</b> ${esc(f[1])}</li>`).join("")}</ul>
+<p class="foot">Ma'lumotlar to'qima (o'quv maqsadida). Tayyorlandi: Yetakla — ${SITE}</p></body></html>`;
+  }
+  function portfolioMD(P) {
+    const tbl = r => `| ${r.cols.join(" | ")} |\n|${r.cols.map(() => "---").join("|")}|\n` + r.rows.slice(0, 20).map(row => `| ${row.map(v => v === null ? "NULL" : String(v)).join(" | ")} |`).join("\n");
+    return `# ${P.title}\n\n${P.who ? P.who + " · " : ""}${P.date} · SQL (SQLite) · Yetakla yakuniy loyihasi\n\n## Topshiriq\n\n${P.brief}\n\n` +
+      P.out.map((o, i) => `## ${i + 1}. ${o.task}\n\n\`\`\`sql\n${o.sql}\n\`\`\`\n\n${tbl(o.r)}\n\n${o.use ? "> " + o.use + "\n\n" : ""}`).join("") +
+      `## Xulosa va tavsiyalar\n\n${P.story}\n\n${P.finds.map(f => `- **${f[0]}** ${f[1]}`).join("\n")}\n\n---\nMa'lumotlar to'qima (o'quv maqsadida). Tayyorlandi: [Yetakla](${SITE})\n`;
+  }
+  function download(name, data, type) {
+    const a = document.createElement("a"); a.href = URL.createObjectURL(data instanceof Blob ? data : new Blob([data], { type }));
+    a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  }
+  async function exportPortfolio(md) {
+    const st = document.getElementById("portst"); if (st) st.textContent = "Tayyorlanmoqda…";
+    try { const P = await buildPortfolio(); md ? download("README.md", portfolioMD(P), "text/markdown") : download("yetakla-portfolio.html", portfolioHTMLDoc(P), "text/html"); if (st) st.textContent = "Yuklab olindi ✓"; }
+    catch (e) { if (st) st.textContent = "Tayyorlab bo'lmadi. Internetni tekshirib, qayta urinib ko'ring."; }
+  }
+
+  /* ---------- natija kartochkasi va do'st taklifi ---------- */
+  let lastWin = null;
+  const inviteLink = () => { const C = window.DY_CLOUD, u = C && C.user(); return u ? SITE + "?ref=" + u.uid : SITE; };
+  function wrapText(x, text, maxW) { const w = String(text).split(" "), lines = []; let cur = ""; w.forEach(s => { const t = cur ? cur + " " + s : s; if (x.measureText(t).width > maxW && cur) { lines.push(cur); cur = s; } else cur = t; }); if (cur) lines.push(cur); return lines; }
+  function rrect(x, a, b, w, h, r) { x.beginPath(); x.moveTo(a + r, b); x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r); x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath(); }
+  async function makeCard(head) {
+    const cv = document.createElement("canvas"); cv.width = 1080; cv.height = 1350; const x = cv.getContext("2d");
+    try { await Promise.all(['800 80px "Baloo 2"', '800 40px "Nunito"', '700 40px "Nunito"'].map(f => document.fonts.load(f))); } catch (e) { /* */ }
+    const g = x.createLinearGradient(0, 0, 1080, 1350); g.addColorStop(0, "#22b062"); g.addColorStop(1, "#13703b"); x.fillStyle = g; x.fillRect(0, 0, 1080, 1350);
+    x.fillStyle = "rgba(255,255,255,.07)"; for (let i = 0; i < 16; i++) for (let j = 0; j < 20; j++) { x.beginPath(); x.arc(30 + i * 70, 30 + j * 70, 4, 0, 7); x.fill(); }
+    x.fillStyle = "#fff"; x.font = '800 64px "Baloo 2", sans-serif'; x.textBaseline = "middle"; x.fillText("Yetakla", 72, 104);
+    rrect(x, 60, 190, 960, 930, 48); x.fillStyle = "#fff"; x.fill();
+    const svg = mascot("happy").replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="448" ');
+    await new Promise(res => { const im = new Image(); im.onload = () => { x.drawImage(im, 390, 260, 300, 336); res(); }; im.onerror = res; im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg); });
+    x.fillStyle = "#16301e"; x.textAlign = "center"; x.font = '800 68px "Baloo 2", sans-serif';
+    const lines = wrapText(x, head, 860).slice(0, 3); lines.forEach((l, i) => x.fillText(l, 540, 680 + i * 80));
+    const C = window.DY_CLOUD, u = C && C.user(), y0 = 680 + lines.length * 80 + 30;
+    const stats = [["⚡ " + S.xp, "XP"], ["🔥 " + S.streak, "kun ketma-ket"], ["📚 " + S.lessonsDone, "dars"]];
+    stats.forEach((s, i) => { const cx = 120 + i * 290; rrect(x, cx, y0, 260, 170, 30); x.fillStyle = "#e8f0e7"; x.fill(); x.fillStyle = "#16301e"; x.font = '800 56px "Baloo 2", sans-serif'; x.fillText(s[0], cx + 130, y0 + 68); x.fillStyle = "#5b7062"; x.font = '700 32px "Nunito", sans-serif'; x.fillText(s[1], cx + 130, y0 + 128); });
+    if (u && u.displayName) { x.fillStyle = "#5b7062"; x.font = '700 38px "Nunito", sans-serif'; x.fillText(u.displayName.trim().split(/\s+/).slice(0, 2).join(" ").slice(0, 32), 540, y0 + 230); }
+    x.fillStyle = "#fff"; x.font = '800 54px "Baloo 2", sans-serif'; x.fillText("yetakla.github.io", 540, 1200);
+    x.font = '700 34px "Nunito", sans-serif'; x.fillStyle = "rgba(255,255,255,.88)"; x.fillText("O'zbek tilida, o'yin orqali o'rganing", 540, 1264);
+    return new Promise(r => cv.toBlob(r, "image/png"));
+  }
+  function defaultHead() { return S.streak >= 2 ? `${S.streak} kun ketma-ket o'qiyapman!` : S.lessonsDone ? `${S.lessonsDone} ta dars tugatdim!` : "Yetakla'da o'rganishni boshladim!"; }
+  async function shareResult(head, btn) {
+    head = head || defaultHead(); if (btn) btn.disabled = true;
+    try {
+      const blob = await makeCard(head), file = new File([blob], "yetakla.png", { type: "image/png" });
+      const text = head + " Men bilan birga o'rganing: " + inviteLink();
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], text }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+      download("yetakla-natija.png", blob); toastNow("Rasm saqlandi — Telegram yoki Instagram'ga joylang", "🖼️");
+    } catch (e) { toastNow("Rasm tayyorlab bo'lmadi", "⚠️"); }
+    finally { if (btn) btn.disabled = false; }
+  }
+  function toastNow(name, emo) { toastQ.push({ name, pre: "", emo, c: "#2f6fdb" }); flushToasts(); }
+  async function shareInvite() {
+    const link = inviteLink(), text = `Yetakla'da men bilan birga o'rganing! Shu havola orqali kirsangiz, ikkalamiz ham +${REF_GIFT} 🪙 olamiz:`;
+    if (navigator.share) { try { await navigator.share({ title: "Yetakla", text, url: link }); return; } catch (e) { if (e && e.name === "AbortError") return; } }
+    try { await navigator.clipboard.writeText(text + " " + link); toastNow("Havola nusxalandi", "🔗"); } catch (e) { toastNow(link, "🔗"); }
+  }
+  function friendsCard() {
+    const C = window.DY_CLOUD, u = C && C.user();
+    return `<div class="card friends"><h3>Do'stlar bilan</h3><p class="muted" style="margin:6px 0 12px">${u ? `Do'stingiz havolangiz orqali kirib, hisob ochsa, ikkalangiz ham +${REF_GIFT} 🪙 olasiz. Taklif qilganlaringiz: ${(S.refClaimed || []).length} ta.` : "Natijangizni ulashing. Do'st taklif qilish va bonus olish uchun hisobga kiring."}</p>
+      <div class="row">${u ? `<button class="btn sm" data-act="invite">Do'stni taklif qilish</button>` : ""}<button class="btn ghost sm" data-act="share">Natijamni ulashish</button></div></div>`;
+  }
+  function tgCard() {
+    const C = window.DY_CLOUD, bot = window.YETAKLA_TG_BOT; if (!C || !bot) return "";
+    const u = C.user();
+    return `<div class="card toggle tg"><span>Telegram eslatmasi <small class="muted" style="display:block;font-size:13px;font-weight:600">${!u ? "Avval hisobga kiring" : C.tg && C.tg() ? "Ulangan ✓ Har kuni kechqurun eslatadi" : "Dars qilmagan kuni kechqurun eslatadi"}</small></span>${u ? `<a class="btn sky sm" href="https://t.me/${esc(bot)}?start=${esc(u.uid)}" target="_blank" rel="noopener">${C.tg && C.tg() ? "Sozlash" : "Ulash"}</a>` : ""}</div>`;
+  }
+
   /* ---------- events ---------- */
   document.addEventListener("click", e => {
-    const t = e.target.closest("[data-act],[data-tab],[data-lesson],[data-start],[data-goal],[data-ogoal]");
+    const t = e.target.closest("[data-act],[data-tab],[data-lesson],[data-start],[data-goal],[data-ogoal],[data-skip]");
     if (!t) return;
+    if (t.dataset.skip) return askTest(t.dataset.skip);
     if (t.dataset.tab) { if (tab !== t.dataset.tab) hpush({ tab: t.dataset.tab }); tab = t.dataset.tab; openLesson = null; modal = null; renderHome(); window.scrollTo(0, 0); return; }
     if (t.dataset.lesson) { openLesson = openLesson === t.dataset.lesson ? null : t.dataset.lesson; renderHome(); return; }
     if (t.dataset.start) {
@@ -950,7 +1200,17 @@
     if (a === "signup-later") { S.askDay = dayStr(); save(); const id = pendingStart; pendingStart = null; closeSheet(); if (id) beginLesson(id); return; }
     if (a === "quit") return leaveLesson();
     if (a === "home") { leaveLesson(); window.scrollTo(0, 0); return; }
-    if (a === "practice") { if (!(history.state && history.state.lesson)) hpush({ tab, lesson: 1 }); return startPractice(); }
+    if (a === "practice" || a === "mistakes") { if (!(history.state && history.state.lesson)) hpush({ tab, lesson: 1 }); return startPractice(a); }
+    if (a === "buy-freeze") { if ((S.freezes || 0) >= FREEZE_MAX || (S.coins || 0) < FREEZE_COST) return; S.coins -= FREEZE_COST; S.freezes = (S.freezes || 0) + 1; save(); renderHome(); sfx("badge"); return; }
+    if (a === "install") return doInstall();
+    if (a === "install-no") { const d = new Date(); d.setDate(d.getDate() + 7); S.installHide = dayStr(d); save(); renderHome(); return; }
+    if (a === "test-go") return startTest(t.dataset.sid);
+    if (a === "port-html") return exportPortfolio(false);
+    if (a === "port-md") return exportPortfolio(true);
+    if (a === "share") return shareResult(null, t);
+    if (a === "share-win") return shareResult(lastWin, t);
+    if (a === "invite") return shareInvite();
+    if (a === "rv-all" || a === "rv-fr") { rankView = a === "rv-fr" ? "fr" : "all"; renderHome(); return; }
     if (a === "sound") { S.sound = !S.sound; save(); renderHome(); sfx("toggle"); return; }
     if (a === "music") { S.music = !S.music; save(); audio(); if (!S.music) musicStopNow(); renderHome(); return; }
     if (a === "reset") { modal = "reset"; renderHome(); return; }
@@ -976,7 +1236,8 @@
   load();
   try { history.replaceState({ tab: "home" }, ""); } catch (e) { /* iframe */ }
   if (!S.onboarded) renderOnboard(1); else renderHome();
-  window.DY_APP = { state: () => S, startLesson, cur: () => session && session.q[session.i], version: "1.2", musicOn: () => !!mTimer && !mOff,
+  window.DY_APP = { state: () => S, startLesson, cur: () => session && session.q[session.i], version: "1.3", musicOn: () => !!mTimer && !mOff,
+    gift, quests: () => quests(),
     replaceState(ns) { S = Object.assign(fresh(), ns); rollDay(); save(); if (!session) renderHome(); },
     refresh() {
       if (pendingStart && window.DY_CLOUD && window.DY_CLOUD.user()) { const id = pendingStart; pendingStart = null; closeSheet(); beginLesson(id); return; }

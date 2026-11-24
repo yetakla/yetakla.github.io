@@ -1,0 +1,17 @@
+{
+  "name": "Yetakla — o'yin orqali o'rganing",
+  "short_name": "Yetakla",
+  "description": "Yangi kasb va ko'nikmalarni o'zbek tilida, o'yin orqali o'rganing",
+  "lang": "uz",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2f7f1",
+  "theme_color": "#1f9d55",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
