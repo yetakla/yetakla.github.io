@@ -579,3 +579,4 @@ i.bar > i { display: block; height: 100%; border-radius: 4px; background: var(--
 .editor.py { min-height: 150px; font-size: 15px; tab-size: 4; white-space: pre; overflow-x: auto; }
 .out .pyprint { margin: 0; background: var(--code-bg); color: var(--code-ink); border-radius: 10px; padding: 10px 12px; font-family: var(--f-mono); font-size: 13px; white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto; }
 .fb .ans code.pyans { display: block; margin-top: 6px; padding: 8px 10px; white-space: pre-wrap; font-weight: 600; font-size: 13px; }
+.mus.thm { color: var(--sun); }
